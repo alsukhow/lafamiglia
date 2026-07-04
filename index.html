@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>La Famiglia — P&L Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F6F4EE; --card:#FFFFFF; --ink:#23201B; --muted:#8B8378;
+  --hairline:#E4DFD4; --hairline-dark:#D4CDBE;
+  --wine:#6E2B36; --wine-soft:#F4ECEE; --gold:#A98B4F; --gold-soft:#F1EBDD;
+  --good:#33684A; --good-bg:#EAF2EC; --bad:#A63B2E; --bad-bg:#F8ECE8;
+  --radius:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--paper);color:var(--ink);font-family:'Inter',system-ui,sans-serif;font-size:14px;line-height:1.45}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+select{font-family:inherit;font-size:13px;color:var(--ink);background:var(--card);border:1px solid var(--hairline-dark);border-radius:7px;padding:7px 10px;outline:none}
+select:focus{border-color:var(--gold)}
+.wrap{max-width:1240px;margin:0 auto;padding:0 20px 64px}
+/* ---------- header ---------- */
+.masthead{padding:30px 0 18px;display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.brand .eyebrow{font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--gold);font-weight:600;margin-bottom:6px}
+.brand h1{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:clamp(30px,4.5vw,42px);letter-spacing:.08em;line-height:1.02}
+.brand .sub{font-size:12.5px;color:var(--muted);margin-top:5px}
+.source{display:flex;align-items:center;gap:10px}
+.badge{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);border:1px solid var(--hairline-dark);border-radius:99px;padding:6px 12px;background:var(--card)}
+.badge .dot{width:7px;height:7px;border-radius:50%;background:var(--gold)}
+.badge.live .dot{background:var(--good)}
+.badge.err .dot{background:var(--bad)}
+.refresh{font-size:11.5px;font-weight:600;color:var(--wine);border:1px solid var(--wine);border-radius:99px;padding:6px 14px;background:var(--card);transition:background .15s}
+.refresh:hover{background:var(--wine-soft)}
+.rule{border:none;border-top:1px solid var(--gold);position:relative;margin-bottom:2px}
+.rule.thin{border-top:1px solid var(--hairline);margin-top:3px;margin-bottom:0}
+/* ---------- tabs ---------- */
+.tabs{display:flex;gap:4px;margin:20px 0 0;border-bottom:1px solid var(--hairline-dark);overflow-x:auto}
+.tab{font-size:13.5px;font-weight:500;color:var(--muted);padding:10px 16px 12px;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;transition:color .15s}
+.tab:hover{color:var(--ink)}
+.tab.on{color:var(--wine);font-weight:600;border-bottom-color:var(--wine)}
+/* ---------- controls ---------- */
+.controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:18px 0 6px}
+.controls .lbl{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:12px;font-weight:500;color:var(--ink);border:1px solid var(--hairline-dark);border-radius:99px;padding:6px 13px;background:var(--card);transition:all .15s}
+.chip:hover{border-color:var(--gold)}
+.chip.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.notice{font-size:12px;color:var(--muted);background:var(--gold-soft);border:1px solid var(--hairline-dark);border-radius:8px;padding:9px 13px;margin:10px 0 0;line-height:1.5}
+.notice b{color:var(--ink);font-weight:600}
+/* ---------- KPI ---------- */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);background:var(--card);border:1px solid var(--hairline);border-radius:var(--radius);margin-top:18px;overflow:hidden}
+.kpi{padding:20px 22px;border-left:1px solid var(--hairline)}
+.kpi:first-child{border-left:none}
+.kpi .k-lbl{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);font-weight:600;margin-bottom:8px}
+.kpi .k-val{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:clamp(24px,2.6vw,31px);line-height:1;letter-spacing:.01em}
+.kpi .k-val .unit{font-size:.52em;color:var(--muted);letter-spacing:.06em;margin-left:4px}
+.kpi .k-sub{font-size:12px;color:var(--muted);margin-top:8px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.delta{display:inline-block;font-size:11px;font-weight:600;border-radius:5px;padding:2px 7px;font-variant-numeric:tabular-nums}
+.delta.up{color:var(--good);background:var(--good-bg)}
+.delta.dn{color:var(--bad);background:var(--bad-bg)}
+.delta.nn{color:var(--muted);background:var(--paper)}
+/* ---------- charts ---------- */
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.chart-card{background:var(--card);border:1px solid var(--hairline);border-radius:var(--radius);padding:18px 20px 12px}
+.chart-card .c-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.chart-card .c-title{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600;letter-spacing:.04em}
+.chart-card .c-legend{font-size:10.5px;color:var(--muted);display:flex;gap:12px;align-items:center}
+.c-legend .sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+/* ---------- table ---------- */
+.table-card{background:var(--card);border:1px solid var(--hairline);border-radius:var(--radius);margin-top:16px;overflow:hidden}
+.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{border-collapse:separate;border-spacing:0;width:100%;min-width:640px}
+th,td{padding:9px 14px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;border-bottom:1px solid var(--hairline)}
+th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card);z-index:2;min-width:230px;max-width:300px;white-space:normal;box-shadow:1px 0 0 var(--hairline)}
+thead th{position:sticky;top:0;background:var(--card);z-index:3;font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);font-weight:600;border-bottom:1px solid var(--hairline-dark);padding-top:13px;padding-bottom:11px}
+thead th:first-child{z-index:4}
+.v{font-weight:500;font-size:13px}
+.p{font-size:10.5px;color:var(--muted);margin-top:1px}
+tr.r-section td{background:var(--paper);font-family:'Cormorant Garamond',serif;font-size:14px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);padding-top:14px;padding-bottom:9px}
+tr.r-section td:first-child{background:var(--paper)}
+tr.r-cat td{font-weight:600}
+tr.r-cat td:first-child{cursor:pointer}
+tr.r-cat:hover td:first-child{color:var(--wine)}
+.caret{display:inline-block;width:14px;color:var(--gold);font-size:10px;transition:transform .15s;margin-right:2px}
+.caret.open{transform:rotate(90deg)}
+tr.r-leaf td{color:#4C463E;font-weight:400}
+tr.r-leaf td:first-child{padding-left:34px;color:#5C554B;font-size:13px}
+tr.r-leaf .v{font-weight:400}
+tr.r-total td{font-weight:700;border-top:1px solid var(--hairline-dark)}
+tr.r-grand td{background:var(--wine-soft);font-weight:700;border-top:1px solid var(--wine)}
+tr.r-grand td:first-child{background:var(--wine-soft);font-family:'Cormorant Garamond',serif;font-size:16px;letter-spacing:.08em}
+td.neg .v{color:var(--bad)}
+.dchip{display:inline-block;font-size:11.5px;font-weight:600;border-radius:5px;padding:2px 7px}
+.dchip.fav{color:var(--good);background:var(--good-bg)}
+.dchip.unf{color:var(--bad);background:var(--bad-bg)}
+.dchip.zero{color:var(--muted)}
+.pbadge{display:inline-block;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);border:1px solid var(--gold);border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:2px;font-weight:600}
+td.bench{font-size:11.5px;color:var(--muted);font-weight:400;border-left:1px dashed var(--hairline)}
+th.bench{border-left:1px dashed var(--hairline)}
+.bdot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:var(--hairline-dark);vertical-align:1px}
+.bdot.in{background:var(--gold)}
+.bdot.ok{background:var(--good)}
+.bdot.warn{background:var(--bad)}
+.scenario-bar{padding:12px 14px;background:var(--card);border:1px solid var(--hairline);border-radius:var(--radius);margin-top:16px;margin-bottom:0}
+.pf-note{border-color:var(--wine);background:var(--wine-soft)}
+.foot{font-size:11.5px;color:var(--muted);padding:12px 16px;border-top:1px solid var(--hairline);line-height:1.6}
+.loading{padding:60px;text-align:center;color:var(--muted);font-size:13px}
+/* ---------- responsive ---------- */
+@media (max-width:900px){
+  .kpis{grid-template-columns:1fr 1fr}
+  .kpi{border-left:none;border-top:1px solid var(--hairline)}
+  .kpi:nth-child(2n){border-left:1px solid var(--hairline)}
+  .kpi:nth-child(-n+2){border-top:none}
+  .charts{grid-template-columns:1fr}
+}
+@media (max-width:640px){
+  .wrap{padding:0 12px 48px}
+  th,td{padding:8px 10px}
+  th:first-child,td:first-child{min-width:158px;font-size:12.5px}
+  tr.r-leaf td:first-child{padding-left:26px;font-size:12px}
+  .v{font-size:12.5px}
+  .kpi{padding:15px 16px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="root"><div class="loading">Загрузка…</div></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
+
+<script>
+/* =========================================================================
+   CONFIG — единственное место, которое нужно менять при подключении Google Sheets
+   1) Создайте Google Sheet с двумя вкладками: "Actual" и "Budget"
+      (шаблон: google_sheets_template.xlsx — загрузите его в Google Sheets).
+   2) Файл → Поделиться → "Все, у кого есть ссылка" → "Читатель".
+   3) Вставьте ID таблицы ниже (часть URL между /d/ и /edit).
+   Пока SHEET_ID пуст — дашборд работает на встроенных данных от 04.07.2026.
+   ========================================================================= */
+const CONFIG = {
+  SHEET_ID: "",
+  TAB_ACTUAL: "Actual",
+  TAB_BUDGET: "Budget",
+  BUDGET_START: "2026-05"   // до этого месяца бюджет приравнивается к факту (Δ = 0)
+};
+</script>
+
+<script src="data.js"></script>
+
+<script type="text/babel" data-presets="react">
+const {useState, useEffect, useMemo, useCallback} = React;
+
+/* ============================ MODEL ============================ */
+const MONTH_LABELS = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
+const MONTH_FULL = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+
+/* --- Сценарии аренды (pro-forma). Применяются одновременно к факту и бюджету,
+       пересчитывают Rent → Total Expenses → EBITDA. --- */
+const RENT_SCENARIOS = [
+  {id:"book",  label:"По учёту · 150k/год", monthly:null},
+  {id:"m1500", label:"Рыночная · 1.5M/год", monthly:125000},
+  {id:"pct10", label:"10% от выручки",      pct:0.10},
+];
+
+/* --- Бенчмарки, % от выручки (fine dining, практика US/GCC).
+       Диапазоны редактируются здесь. null = бенчмарка нет. --- */
+const BENCHMARKS = {
+  cogs_total:   [0.28,0.32],
+  gross_profit: [0.68,0.72],
+  bank_total:   [0.015,0.025],
+  emp_total:    [0.28,0.35],
+  gen_total:    [0.04,0.06],
+  legal_total:  [0.01,0.02],
+  mkt_total:    [0.03,0.06],
+  shared_total: [0.02,0.04],
+  util_total:   [0.015,0.03],
+  rent_total:   [0.06,0.10],
+  exp_total:    null,
+  ebitda:       [0.10,0.20],
+};
+const BENCH_HIGHER_BETTER = new Set(["gross_profit","ebitda"]);
+
+const MODEL = [
+  {type:"group", section:"Выручка", dir:"rev", totalId:"rev_total", totalLabel:"Итого выручка",
+   leaves:[["rev_bev_alc","Beverages Alcoholic"],["rev_bev_nonalc","Beverages Non-Alcoholic"],["rev_food","Food"]]},
+  {type:"group", section:"Себестоимость", dir:"cost", totalId:"cogs_total", totalLabel:"Итого себестоимость",
+   leaves:[["cogs_bev_alc","COGS Beverages Alcoholic"],["cogs_bev_nonalc","COGS Beverages Non-Alc."],["cogs_food","COGS Food"]]},
+  {type:"single", id:"gross_profit", label:"Валовая прибыль", dir:"rev", grand:true},
+  {type:"group", section:"Прочие доходы / расходы", dir:"rev", totalId:"oi_total", totalLabel:"Итого прочие доходы (убыток)",
+   leaves:[["oi_service_charges","Service Charges"],["oi_service_paid","Service Charges Paid"],["oi_tips_collected","Tips Collected"],["oi_tips_paid","Tips Paid"]]},
+  {type:"expenses", section:"Операционные расходы", dir:"cost", cats:[
+    {totalId:"bank_total", label:"Bank Charges & Commissions",
+     leaves:[["bank_charges","Bank Charges"],["bank_cc","Credit Card Commission"]]},
+    {totalId:"emp_total", label:"Employee Cost",
+     leaves:[["emp_accommodation","Accommodation Expenses"],["emp_air","Air Ticket"],["emp_medical","Employee Medical Insurance"],["emp_gratuity","Gratuity Expense"],["emp_part_timers","Part Timers Salary"],["emp_salaries","Salaries"],["emp_staff_meal","Staff Meal"],["emp_staff_welfare","Staff Welfare"],["emp_travel_allow","Travel Allowance"],["emp_uniforms","Uniforms"],["emp_visa","Visa & Immigration"]]},
+    {totalId:"gen_total", label:"General Expenses",
+     leaves:[["gen_consumables_inv","Consumables — Inventory"],["gen_gas","Gas Supply"],["gen_consumables","General Consumables"],["gen_laundry","Laundry Services"],["gen_office","Office Expenses"],["gen_operating","Operating Expenses"],["gen_pro","PRO Expenses"],["gen_repairs","Repairs & Maintenance"],["gen_rounding","Rounding Off"],["gen_stationery","Stationery & Printing"],["gen_subscriptions","Subscriptions"],["gen_telephone","Telephone Expenses"],["gen_travel","Travel Expenses"],["gen_utensils","Utensils, Cutleries & Pack."]]},
+    {totalId:"legal_total", label:"Legal & Professional",
+     leaves:[["legal_alcohol","Alcohol License Fee"],["legal_permits","Permit Costs"],["legal_trade","Trade License Fee"]]},
+    {totalId:"mkt_total", label:"Marketing & Advertising",
+     leaves:[["mkt_branding","Branding Expenses"],["mkt_marketing","Marketing Expenses"]]},
+    {totalId:"shared_total", label:"Shared Costs (ISD)",
+     leaves:[["shared_emp_fnb","Shared Employee Cost — F&B"],["shared_emp_isd","Shared Employee Cost — ISD"],["shared_general","Shared General Expenses"]]},
+    {totalId:"util_total", label:"Utilities (DEWA)", leaves:[]},
+    {totalId:"sec_total", label:"Security", leaves:[]},
+    {totalId:"rent_total", label:"Rent or Lease Payments", leaves:[]},
+  ]},
+  {type:"single", id:"exp_total", label:"Итого операционные расходы", dir:"cost", grand:false, totalStyle:true},
+  {type:"single", id:"ebitda", label:"EBITDA", dir:"rev", grand:true},
+];
+
+const REV_LIKE = new Set(["rev_bev_alc","rev_bev_nonalc","rev_food","rev_total","gross_profit","oi_service_charges","oi_service_paid","oi_tips_collected","oi_tips_paid","oi_total","ebitda"]);
+
+/* ============================ HELPERS ============================ */
+const fmt0 = new Intl.NumberFormat("en-US",{maximumFractionDigits:0});
+function fmtAED(v){
+  if(v==null) return "—";
+  const r = Math.round(v);
+  return r<0 ? "("+fmt0.format(-r)+")" : fmt0.format(r);
+}
+function fmtPct(v,dec=1){
+  if(v==null||!isFinite(v)) return "—";
+  return (v*100).toFixed(dec)+"%";
+}
+function fmtPP(v){
+  if(v==null||!isFinite(v)) return "—";
+  const s=(v*100).toFixed(1);
+  return (v>0?"+":"")+s+" пп";
+}
+function fmtDeltaPct(v){
+  if(v==null||!isFinite(v)) return "—";
+  const s=(v*100).toFixed(1);
+  return (v>0?"+":"")+s+"%";
+}
+function sumRange(ds,id,months){
+  const arr = ds[id]; if(!arr) return null;
+  let s=0, any=false;
+  for(const m of months){ if(arr[m]!=null){s+=arr[m];any=true;} }
+  return any? s : null;
+}
+function monthKey(i){ return "2026-"+String(i+1).padStart(2,"0"); }
+
+/* ============================ DATA LAYER ============================ */
+function applyBudgetOverride(actual, budget, budgetStartIdx){
+  const b = {};
+  for(const id in budget){ b[id] = budget[id].slice(); }
+  for(const id in actual){
+    if(!b[id]) b[id] = new Array(12).fill(null);
+    for(let m=0;m<budgetStartIdx;m++){ b[id][m] = actual[id][m]; }
+  }
+  return b;
+}
+function applyRentScenario(ds, sc){
+  if(sc.id==="book") return ds;
+  const out = {};
+  for(const k in ds) out[k] = ds[k].slice();
+  for(let m=0;m<12;m++){
+    const oldRent = ds.rent_total ? ds.rent_total[m] : null;
+    const rev = ds.rev_total ? ds.rev_total[m] : null;
+    const newRent = sc.monthly!=null ? sc.monthly : (rev!=null ? rev*sc.pct : null);
+    if(oldRent==null || newRent==null) continue; // частичные месяцы не трогаем
+    const dlt = newRent - oldRent;
+    out.rent_lease[m] = newRent;
+    out.rent_total[m] = newRent;
+    if(out.exp_total[m]!=null) out.exp_total[m] = out.exp_total[m] + dlt;
+    if(out.ebitda[m]!=null)    out.ebitda[m]    = out.ebitda[m] - dlt;
+  }
+  return out;
+}
+function completeMonths(actual){
+  const out=[];
+  for(let m=0;m<12;m++){ if(actual.ebitda && actual.ebitda[m]!=null) out.push(m); }
+  return out;
+}
+function monthsWithAnyActual(actual){
+  const out=new Set();
+  for(const id in actual){ actual[id].forEach((v,m)=>{ if(v!=null) out.add(m); }); }
+  return [...out].sort((a,b)=>a-b);
+}
+async function loadSheetTab(sheetId, tab){
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tab)}`;
+  const res = await fetch(url);
+  if(!res.ok) throw new Error("HTTP "+res.status);
+  const txt = await res.text();
+  const json = JSON.parse(txt.substring(txt.indexOf("{"), txt.lastIndexOf("}")+1));
+  const out = {};
+  for(const row of (json.table.rows||[])){
+    const c = row.c;
+    if(!c || !c[0] || c[0].v==null) continue;
+    const id = String(c[0].v).trim();
+    if(!id || id==="id") continue;
+    out[id] = Array.from({length:12},(_,i)=>{
+      const cell = c[2+i];
+      if(!cell || cell.v==null || cell.v==="") return null;
+      const n = typeof cell.v==="number" ? cell.v : parseFloat(String(cell.v).replace(/[\s,]/g,""));
+      return isFinite(n)? n : null;
+    });
+  }
+  return out;
+}
+
+/* ============================ UI ATOMS ============================ */
+function Delta({raw, favorable, text}){
+  if(raw==null) return <span className="delta nn">—</span>;
+  const cls = raw===0 ? "nn" : (favorable ? "up" : "dn");
+  return <span className={"delta "+cls}>{text}</span>;
+}
+function DChip({d, revLike, sub}){
+  if(d==null) return <span className="dchip zero">—</span>;
+  if(Math.round(d)===0) return <span className="dchip zero">0</span>;
+  const fav = revLike ? d>0 : d<0;
+  return (
+    <span>
+      <span className={"dchip "+(fav?"fav":"unf")}>{(d>0?"+":"−")+fmt0.format(Math.abs(Math.round(d)))}</span>
+      {sub!=null && <div className="p">{sub}</div>}
+    </span>
+  );
+}
+function Cell({v, pct, neg}){
+  return (
+    <td className={neg && v!=null && v<0 ? "neg":""}>
+      <div className="v">{fmtAED(v)}</div>
+      {pct!==undefined && <div className="p">{pct}</div>}
+    </td>
+  );
+}
+function fmtBenchNum(x){
+  const p = Math.round(x*1000)/10;
+  return (p%1 ? p.toFixed(1) : p.toFixed(0));
+}
+function BenchCell({id, pct}){
+  const b = BENCHMARKS[id];
+  if(!b) return <td className="bench">—</td>;
+  const [lo,hi] = b;
+  let cls = "";
+  if(pct!=null && isFinite(pct)){
+    const hb = BENCH_HIGHER_BETTER.has(id);
+    if(pct > hi)      cls = hb ? "ok"   : "warn";
+    else if(pct < lo) cls = hb ? "warn" : "ok";
+    else              cls = "in";
+  }
+  return <td className="bench"><span className={"bdot "+cls}></span>{fmtBenchNum(lo)}–{fmtBenchNum(hi)}%</td>;
+}
+
+/* ============================ MINI CHART ============================ */
+function MiniBars({title, actual, budget, unit}){
+  const W=520, H=170, padL=8, padR=8, padT=12, padB=22;
+  const all = [...actual.filter(v=>v!=null), ...budget.filter(v=>v!=null), 0];
+  const max = Math.max(...all), min = Math.min(...all);
+  const span = (max-min)||1;
+  const y = v => padT + (max - v)/span * (H-padT-padB);
+  const bw = (W-padL-padR)/12;
+  return (
+    <div className="chart-card">
+      <div className="c-head">
+        <div className="c-title">{title}</div>
+        <div className="c-legend">
+          <span><span className="sw" style={{background:"var(--wine)"}}></span>Факт</span>
+          <span><span className="sw" style={{background:"none",borderTop:"2.5px solid var(--gold)",height:0,width:12}}></span>Бюджет</span>
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={title}>
+        <line x1={padL} x2={W-padR} y1={y(0)} y2={y(0)} stroke="var(--hairline-dark)" strokeWidth="1"/>
+        {actual.map((v,i)=>{
+          if(v==null) return null;
+          const x = padL + i*bw + bw*0.2;
+          const y0=y(0), y1=y(v);
+          return <rect key={"a"+i} x={x} width={bw*0.6} y={Math.min(y0,y1)} height={Math.max(1.5,Math.abs(y0-y1))}
+                       fill="var(--wine)" opacity={v<0?0.75:0.92} rx="1.5"/>;
+        })}
+        {budget.map((v,i)=>{
+          if(v==null) return null;
+          const x = padL + i*bw + bw*0.08;
+          return <line key={"b"+i} x1={x} x2={x+bw*0.84} y1={y(v)} y2={y(v)} stroke="var(--gold)" strokeWidth="2.5"/>;
+        })}
+        {MONTH_LABELS.map((m,i)=>(
+          <text key={m} x={padL+i*bw+bw/2} y={H-6} textAnchor="middle" fontSize="9.5" fill="var(--muted)" fontFamily="Inter">{m[0]}</text>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+/* ============================ TABLE ROWS ============================ */
+function useRows(expanded, toggle){
+  return useCallback(function buildRows(renderCells){
+    const rows=[];
+    for(const block of MODEL){
+      if(block.type==="group"){
+        rows.push(<tr key={"s"+block.section} className="r-section"><td colSpan={99}>{block.section}</td></tr>);
+        for(const [id,label] of block.leaves){
+          rows.push(<tr key={id} className="r-leaf"><td>{label}</td>{renderCells(id, block.dir, false)}</tr>);
+        }
+        rows.push(<tr key={block.totalId} className="r-total"><td>{block.totalLabel}</td>{renderCells(block.totalId, block.dir, true)}</tr>);
+      }
+      else if(block.type==="expenses"){
+        rows.push(<tr key="sexp" className="r-section"><td colSpan={99}>{block.section}</td></tr>);
+        for(const cat of block.cats){
+          const hasKids = cat.leaves.length>0;
+          const open = expanded.has(cat.totalId);
+          rows.push(
+            <tr key={cat.totalId} className="r-cat">
+              <td onClick={hasKids? ()=>toggle(cat.totalId) : undefined}>
+                {hasKids && <span className={"caret"+(open?" open":"")}>▶</span>}
+                {!hasKids && <span className="caret" style={{opacity:0}}>▶</span>}
+                {cat.label}
+              </td>
+              {renderCells(cat.totalId, "cost", true)}
+            </tr>
+          );
+          if(open) for(const [id,label] of cat.leaves){
+            rows.push(<tr key={id} className="r-leaf"><td>{label}</td>{renderCells(id,"cost",false)}</tr>);
+          }
+        }
+      }
+      else if(block.type==="single"){
+        const cls = block.grand ? "r-grand" : "r-total";
+        rows.push(<tr key={block.id} className={cls}><td>{block.label}</td>{renderCells(block.id, block.dir, true)}</tr>);
+      }
+    }
+    return rows;
+  },[expanded,toggle]);
+}
+
+/* ============================ VIEWS ============================ */
+function PLTable({ds, months, complete, partialSet, label}){
+  const [expanded,setExpanded]=useState(new Set(["emp_total"]));
+  const toggle = useCallback(id=>setExpanded(p=>{const n=new Set(p); n.has(id)?n.delete(id):n.add(id); return n;}),[]);
+  const buildRows = useRows(expanded,toggle);
+  const totalMonths = months.filter(m=>complete.includes(m));
+  const totalLabel = totalMonths.length===months.length
+    ? "Итого"
+    : "Итого ("+MONTH_LABELS[totalMonths[0]]+"–"+MONTH_LABELS[totalMonths[totalMonths.length-1]]+")";
+  const revByMonth = months.map(m=> ds.rev_total ? ds.rev_total[m] : null);
+  const revTotal = sumRange(ds,"rev_total",totalMonths);
+
+  const renderCells=(id)=>{
+    const cells = months.map((m,i)=>{
+      const v = ds[id]? ds[id][m] : null;
+      const rev = revByMonth[i];
+      const pct = (v!=null && rev) ? fmtPct(v/rev) : "";
+      return <Cell key={m} v={v} pct={pct} neg={true}/>;
+    });
+    let benchPct = null;
+    if(totalMonths.length>0){
+      const t = sumRange(ds,id,totalMonths);
+      const pct = (t!=null && revTotal) ? fmtPct(t/revTotal) : "";
+      benchPct = (t!=null && revTotal) ? t/revTotal : null;
+      cells.push(<Cell key="tot" v={t} pct={pct} neg={true}/>);
+    }
+    cells.push(<BenchCell key="bench" id={id} pct={benchPct}/>);
+    return cells;
+  };
+  return (
+    <div className="table-card">
+      <div className="table-scroll">
+        <table>
+          <thead><tr>
+            <th>{label}</th>
+            {months.map(m=><th key={m}>{MONTH_LABELS[m]} ’26{partialSet.has(m)&&<span className="pbadge">частично</span>}</th>)}
+            {totalMonths.length>0 && <th>{totalLabel}</th>}
+            <th className="bench">Бенчмарк</th>
+          </tr></thead>
+          <tbody>{buildRows(renderCells)}</tbody>
+        </table>
+      </div>
+      <div className="foot">
+        Все суммы в AED, по методу начисления. Серым под суммой — доля от выручки периода.
+        Бенчмарк — ориентир fine dining (% от выручки, практика US/GCC), точка: <span className="bdot ok" style={{verticalAlign:0}}></span>лучше диапазона · <span className="bdot in" style={{verticalAlign:0}}></span>в диапазоне · <span className="bdot warn" style={{verticalAlign:0}}></span>хуже диапазона — по колонке «Итого».
+        {months.some(m=>partialSet.has(m)) && <span> Частичные месяцы (загружена только выручка) исключены из колонки «Итого».</span>}
+      </div>
+    </div>
+  );
+}
+
+function CompareTable({actual, budget, months}){
+  const [expanded,setExpanded]=useState(new Set(["emp_total"]));
+  const toggle = useCallback(id=>setExpanded(p=>{const n=new Set(p); n.has(id)?n.delete(id):n.add(id); return n;}),[]);
+  const buildRows = useRows(expanded,toggle);
+  const revA = sumRange(actual,"rev_total",months);
+  const revB = sumRange(budget,"rev_total",months);
+
+  const renderCells=(id)=>{
+    const a = sumRange(actual,id,months);
+    const b = sumRange(budget,id,months);
+    const pa = (a!=null&&revA)? a/revA : null;
+    const pb = (b!=null&&revB)? b/revB : null;
+    const d = (a!=null&&b!=null)? a-b : null;
+    const dp = (d!=null&&b!==0&&b!=null)? d/Math.abs(b) : null;
+    return [
+      <Cell key="a" v={a} pct={pa!=null?fmtPct(pa):""} neg={true}/>,
+      <Cell key="b" v={b} pct={pb!=null?fmtPct(pb):""} neg={true}/>,
+      <td key="d"><DChip d={d} revLike={REV_LIKE.has(id)} sub={dp!=null?fmtDeltaPct(dp):null}/></td>,
+      <BenchCell key="bench" id={id} pct={pa}/>
+    ];
+  };
+  return (
+    <div className="table-card">
+      <div className="table-scroll">
+        <table>
+          <thead><tr>
+            <th>Статья</th><th>Факт</th><th>Бюджет</th><th>Δ Факт − Бюджет</th><th className="bench">Бенчмарк</th>
+          </tr></thead>
+          <tbody>{buildRows(renderCells)}</tbody>
+        </table>
+      </div>
+      <div className="foot">
+        Зелёный — благоприятное отклонение (выручка/прибыль выше бюджета, затраты ниже), красный — неблагоприятное.
+        Серым под суммой — доля от выручки периода; под Δ — отклонение в % от бюджета.
+        Бенчмарк — ориентир fine dining (% от выручки), точка показывает положение факта относительно диапазона.
+        «—» в бюджете по строкам Income/COGS с мая: бюджет утверждён на уровне итогов, детализация сравнивается по строкам «Итого».
+      </div>
+    </div>
+  );
+}
+
+/* ============================ APP ============================ */
+function App(){
+  const [raw,setRaw]=useState({actual:EMBEDDED_DATA.actual, budget:EMBEDDED_DATA.budget});
+  const [source,setSource]=useState({mode:"embedded", at:EMBEDDED_DATA.asOf, err:null});
+  const [view,setView]=useState("compare");
+  const [rentSc,setRentSc]=useState(RENT_SCENARIOS[0]);
+  const budgetStartIdx = useMemo(()=>EMBEDDED_DATA.months.indexOf(CONFIG.BUDGET_START),[]);
+  const budget = useMemo(()=>applyRentScenario(applyBudgetOverride(raw.actual, raw.budget, budgetStartIdx), rentSc),[raw,budgetStartIdx,rentSc]);
+  const actual = useMemo(()=>applyRentScenario(raw.actual, rentSc),[raw,rentSc]);
+
+  const complete = useMemo(()=>completeMonths(actual),[actual]);
+  const anyData = useMemo(()=>monthsWithAnyActual(actual),[actual]);
+  const partialSet = useMemo(()=>new Set(anyData.filter(m=>!complete.includes(m))),[anyData,complete]);
+  const lastComplete = complete.length? complete[complete.length-1] : 0;
+  const lastAny = anyData.length? anyData[anyData.length-1] : 0;
+
+  // period state
+  const [plFrom,setPlFrom]=useState(0);
+  const [plTo,setPlTo]=useState(lastAny);
+  const [cFrom,setCFrom]=useState(lastComplete);
+  const [cTo,setCTo]=useState(lastComplete);
+
+  const load = useCallback(async ()=>{
+    if(!CONFIG.SHEET_ID){ setSource(s=>({...s, err:"SHEET_ID не задан — используются встроенные данные"})); return; }
+    try{
+      setSource({mode:"loading",at:null,err:null});
+      const [a,b] = await Promise.all([
+        loadSheetTab(CONFIG.SHEET_ID, CONFIG.TAB_ACTUAL),
+        loadSheetTab(CONFIG.SHEET_ID, CONFIG.TAB_BUDGET)
+      ]);
+      if(!a.rev_total) throw new Error("во вкладке Actual не найдена строка rev_total — проверьте колонку id");
+      setRaw({actual:a, budget:b});
+      const now = new Date();
+      setSource({mode:"live", at:now.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}), err:null});
+    }catch(e){
+      setSource({mode:"embedded", at:EMBEDDED_DATA.asOf, err:"Google Sheets недоступен ("+e.message+") — показаны встроенные данные"});
+    }
+  },[]);
+  useEffect(()=>{ if(CONFIG.SHEET_ID) load(); },[load]);
+
+  // months for current view
+  const plMonths = useMemo(()=>{ const out=[]; for(let m=plFrom;m<=plTo;m++) out.push(m); return out; },[plFrom,plTo]);
+  const cmpMonths = useMemo(()=>{ const out=[]; for(let m=cFrom;m<=cTo;m++) if(complete.includes(m)) out.push(m); return out; },[cFrom,cTo,complete]);
+  const budgetMonths = useMemo(()=>Array.from({length:12},(_,i)=>i),[]);
+
+  // KPI period
+  const kpiMonths = view==="budget" ? budgetMonths : (view==="pl" ? plMonths.filter(m=>complete.includes(m)) : cmpMonths);
+  const kpiDS = view==="budget" ? budget : actual;
+  const kpiCmp = view!=="budget";
+  const kRev = sumRange(kpiDS,"rev_total",kpiMonths);
+  const kRevB = sumRange(budget,"rev_total",kpiMonths);
+  const kGP = sumRange(kpiDS,"gross_profit",kpiMonths);
+  const kGPB = sumRange(budget,"gross_profit",kpiMonths);
+  const kCOGS = sumRange(kpiDS,"cogs_total",kpiMonths);
+  const kEmp = sumRange(kpiDS,"emp_total",kpiMonths);
+  const kCOGSB = sumRange(budget,"cogs_total",kpiMonths);
+  const kEmpB = sumRange(budget,"emp_total",kpiMonths);
+  const kEB = sumRange(kpiDS,"ebitda",kpiMonths);
+  const kEBB = sumRange(budget,"ebitda",kpiMonths);
+  const gm = (kGP!=null&&kRev)? kGP/kRev : null;
+  const gmB = (kGPB!=null&&kRevB)? kGPB/kRevB : null;
+  const prime = (kCOGS!=null&&kEmp!=null&&kRev)? (kCOGS+kEmp)/kRev : null;
+  const primeB = (kCOGSB!=null&&kEmpB!=null&&kRevB)? (kCOGSB+kEmpB)/kRevB : null;
+  const ebm = (kEB!=null&&kRev)? kEB/kRev : null;
+  const revD = (kRev!=null&&kRevB)? (kRev-kRevB)/Math.abs(kRevB) : null;
+  const ebD = (kEB!=null&&kEBB!=null)? kEB-kEBB : null;
+  const kpiCaption = kpiMonths.length===0 ? "—" :
+    kpiMonths.length===1 ? MONTH_FULL[kpiMonths[0]]+" 2026" :
+    MONTH_LABELS[kpiMonths[0]]+"–"+MONTH_LABELS[kpiMonths[kpiMonths.length-1]]+" 2026";
+
+  const monthSel = (val,set,opts)=>(
+    <select value={val} onChange={e=>set(+e.target.value)}>
+      {opts.map(m=><option key={m} value={m}>{MONTH_FULL[m]}</option>)}
+    </select>
+  );
+
+  return (
+    <div className="wrap">
+      <div className="masthead">
+        <div className="brand">
+          <div className="eyebrow">Dubai Sports City · Financial Report · FY 2026</div>
+          <h1>LA FAMIGLIA</h1>
+          <div className="sub">P&L и исполнение бюджета · AED · метод начисления</div>
+        </div>
+        <div className="source">
+          <span className={"badge "+(source.mode==="live"?"live":source.err&&CONFIG.SHEET_ID?"err":"")}>
+            <span className="dot"></span>
+            {source.mode==="live" ? "Google Sheets · "+source.at
+             : source.mode==="loading" ? "Загрузка из Google Sheets…"
+             : "Встроенные данные · "+EMBEDDED_DATA.asOf}
+          </span>
+          {CONFIG.SHEET_ID && <button className="refresh" onClick={load}>Обновить</button>}
+        </div>
+      </div>
+      <hr className="rule"/><hr className="rule thin"/>
+      {source.err && CONFIG.SHEET_ID && <div className="notice"><b>Внимание:</b> {source.err}</div>}
+
+      <div className="tabs" role="tablist">
+        <button className={"tab"+(view==="pl"?" on":"")} onClick={()=>setView("pl")}>P&L · Факт</button>
+        <button className={"tab"+(view==="budget"?" on":"")} onClick={()=>setView("budget")}>Бюджет FY26</button>
+        <button className={"tab"+(view==="compare"?" on":"")} onClick={()=>setView("compare")}>Факт vs Бюджет</button>
+      </div>
+
+      <div className="controls scenario-bar">
+        <span className="lbl">Сценарий аренды</span>
+        <div className="chips">
+          {RENT_SCENARIOS.map(s=>(
+            <button key={s.id} className={"chip"+(rentSc.id===s.id?" on":"")} onClick={()=>setRentSc(s)}>{s.label}</button>
+          ))}
+        </div>
+      </div>
+      {rentSc.id!=="book" && (
+        <div className="notice pf-note">
+          <b>Pro-forma:</b> аренда пересчитана по сценарию «{rentSc.label}» одновременно в факте и бюджете;
+          Total Expenses и EBITDA скорректированы. Цифры <b>не соответствуют</b> бухгалтерскому P&L —
+          используйте для оценки экономики при рыночной ставке, не для отчётности.
+        </div>
+      )}
+
+      {view==="pl" && (
+        <div className="controls">
+          <span className="lbl">Период</span>
+          {monthSel(plFrom, m=>{setPlFrom(m); if(m>plTo)setPlTo(m);}, anyData)}
+          <span style={{color:"var(--muted)"}}>—</span>
+          {monthSel(plTo, m=>{setPlTo(m); if(m<plFrom)setPlFrom(m);}, anyData)}
+          <div className="chips">
+            <button className="chip" onClick={()=>{setPlFrom(lastComplete);setPlTo(lastComplete);}}>Посл. месяц</button>
+            <button className="chip" onClick={()=>{setPlFrom(0);setPlTo(lastAny);}}>YTD</button>
+            <button className="chip" onClick={()=>{setPlFrom(0);setPlTo(Math.min(2,lastAny));}}>Q1</button>
+            <button className="chip" onClick={()=>{setPlFrom(3);setPlTo(Math.min(5,lastAny));}}>Q2</button>
+          </div>
+        </div>
+      )}
+      {view==="compare" && (
+        <div className="controls">
+          <span className="lbl">Период сравнения</span>
+          {monthSel(cFrom, m=>{setCFrom(m); if(m>cTo)setCTo(m);}, complete)}
+          <span style={{color:"var(--muted)"}}>—</span>
+          {monthSel(cTo, m=>{setCTo(m); if(m<cFrom)setCFrom(m);}, complete)}
+          <div className="chips">
+            <button className="chip" onClick={()=>{setCFrom(lastComplete);setCTo(lastComplete);}}>Посл. месяц</button>
+            <button className="chip" onClick={()=>{setCFrom(0);setCTo(lastComplete);}}>YTD</button>
+            <button className="chip" onClick={()=>{setCFrom(0);setCTo(Math.min(2,lastComplete));}}>Q1</button>
+            <button className="chip" onClick={()=>{setCFrom(3);setCTo(Math.min(5,lastComplete));}}>Q2</button>
+          </div>
+        </div>
+      )}
+      {view==="compare" && cFrom < budgetStartIdx && (
+        <div className="notice">
+          Бюджет на <b>январь–апрель</b> приравнен к факту (Δ = 0): бюджет FY26 утверждён с мая. Сравнение содержательно с <b>мая 2026</b>.
+        </div>
+      )}
+      {view==="pl" && plMonths.some(m=>partialSet.has(m)) && (
+        <div className="notice">
+          <b>Июнь 2026 — частичный месяц:</b> загружена только выручка, расходы ещё не закрыты. Колонка «Итого» считается по полным месяцам.
+        </div>
+      )}
+
+      <div className="kpis">
+        <div className="kpi">
+          <div className="k-lbl">Выручка · {kpiCaption}</div>
+          <div className="k-val">{fmtAED(kRev)}<span className="unit">AED</span></div>
+          <div className="k-sub">{kpiCmp && <Delta raw={revD} favorable={revD>0} text={"vs бюджет "+fmtDeltaPct(revD)}/>}
+            {!kpiCmp && <span>план на год: {fmtAED(sumRange(budget,"rev_total",budgetMonths))} AED</span>}</div>
+        </div>
+        <div className="kpi">
+          <div className="k-lbl">Валовая маржа</div>
+          <div className="k-val">{fmtPct(gm)}</div>
+          <div className="k-sub">{kpiCmp
+            ? <Delta raw={gm!=null&&gmB!=null?gm-gmB:null} favorable={gm-gmB>0} text={"vs бюджет "+fmtPP(gm!=null&&gmB!=null?gm-gmB:null)}/>
+            : <span>целевая по бюджету: {fmtPct(gmB)}</span>}</div>
+        </div>
+        <div className="kpi">
+          <div className="k-lbl">Prime Cost (COGS + ФОТ)</div>
+          <div className="k-val">{fmtPct(prime)}</div>
+          <div className="k-sub">{kpiCmp
+            ? <Delta raw={prime!=null&&primeB!=null?prime-primeB:null} favorable={prime-primeB<0} text={"vs бюджет "+fmtPP(prime!=null&&primeB!=null?prime-primeB:null)}/>
+            : <span>бюджет: {fmtPct(primeB)}</span>}
+            <span>· бенчмарк ≤ 60%</span></div>
+        </div>
+        <div className="kpi">
+          <div className="k-lbl">EBITDA</div>
+          <div className="k-val">{fmtAED(kEB)}<span className="unit">AED</span></div>
+          <div className="k-sub"><span>маржа {fmtPct(ebm)}</span>
+            {kpiCmp && <Delta raw={ebD} favorable={ebD>0} text={"vs бюджет "+(ebD>0?"+":"−")+fmt0.format(Math.abs(Math.round(ebD||0)))}/>}</div>
+        </div>
+      </div>
+
+      <div className="charts">
+        <MiniBars title="Выручка по месяцам" actual={actual.rev_total||[]} budget={budget.rev_total||[]}/>
+        <MiniBars title="EBITDA по месяцам" actual={actual.ebitda||[]} budget={budget.ebitda||[]}/>
+      </div>
+
+      {view==="pl" && <PLTable ds={actual} months={plMonths} complete={complete} partialSet={partialSet} label="P&L · Факт"/>}
+      {view==="budget" && <PLTable ds={budget} months={budgetMonths} complete={budgetMonths} partialSet={new Set()} label="Бюджет FY26"/>}
+      {view==="compare" && <CompareTable actual={actual} budget={budget} months={cmpMonths}/>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
