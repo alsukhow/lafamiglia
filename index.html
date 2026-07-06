@@ -156,9 +156,18 @@ const CONFIG = {
 <script type="text/babel" data-presets="react">
 const {useState, useEffect, useMemo, useCallback} = React;
 
+/* --- Защита от отсутствующего data.js: если файл не загрузился (404, опечатка
+       в пути при деплое), приложение не падает — стартует на пустых данных
+       и пытается подтянуть Google Sheets. --- */
+const DATA = (typeof EMBEDDED_DATA !== "undefined" && EMBEDDED_DATA)
+  ? EMBEDDED_DATA
+  : {actual:{}, budget:{}, asOf:"нет данных (data.js не загружен)"};
+
 /* ============================ MODEL ============================ */
 const MONTH_LABELS = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
 const MONTH_FULL = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+/* подписи оси X графиков — двухбуквенные, без дублей (Мар/Май, Июн/Июл, Апр/Авг) */
+const MONTH_AXIS = ["Ян","Фе","Мр","Ап","Ма","Ин","Ил","Ав","Се","Ок","Но","Де"];
 
 /* --- Сценарии аренды (pro-forma). Применяются одновременно к факту и бюджету,
        пересчитывают Rent → Total Expenses → EBITDA. --- */
@@ -182,7 +191,7 @@ const BENCHMARKS = {
   util_total:   [0.015,0.03],
   rent_total:   [0.06,0.10],
   exp_total:    null,
-  ebitda:       [0.10,0.20],
+  ebitda:       [0.08,0.15],   // fine dining на уровне ресторана: 5–15%; 10–20% — диапазон casual/QSR
 };
 const BENCH_HIGHER_BETTER = new Set(["gross_profit","ebitda"]);
 
@@ -238,6 +247,12 @@ function fmtDeltaPct(v){
   const s=(v*100).toFixed(1);
   return (v>0?"+":"")+s+"%";
 }
+function fmtDeltaAED(v){
+  if(v==null||!isFinite(v)) return "—";
+  const r = Math.round(v);
+  if(r===0) return "0";
+  return (r>0?"+":"−")+fmt0.format(Math.abs(r));
+}
 function sumRange(ds,id,months){
   const arr = ds[id]; if(!arr) return null;
   let s=0, any=false;
@@ -260,6 +275,11 @@ function applyRentScenario(ds, sc){
   if(sc.id==="book") return ds;
   const out = {};
   for(const k in ds) out[k] = ds[k].slice();
+  // защита: если в источнике нет строк rent_lease / rent_total / exp_total / ebitda,
+  // создаём пустые массивы, чтобы переключение сценария не роняло приложение
+  for(const k of ["rent_lease","rent_total","exp_total","ebitda"]){
+    if(!out[k]) out[k] = new Array(12).fill(null);
+  }
   for(let m=0;m<12;m++){
     const oldRent = ds.rent_total ? ds.rent_total[m] : null;
     const rev = ds.rev_total ? ds.rev_total[m] : null;
@@ -417,8 +437,8 @@ function MiniBars({title, bars, ticks, barColor, barLabel}){
             </g>
           );
         })}
-        {MONTH_LABELS.map((m,i)=>(
-          <text key={m} x={padL+i*bw+bw/2} y={H-8} textAnchor="middle" fontSize="9.5" fill="var(--muted)" fontFamily="Inter">{m[0]}</text>
+        {MONTH_AXIS.map((m,i)=>(
+          <text key={m+i} x={padL+i*bw+bw/2} y={H-8} textAnchor="middle" fontSize="9" fill="var(--muted)" fontFamily="Inter">{m}</text>
         ))}
       </svg>
     </div>
@@ -560,11 +580,17 @@ function CompareTable({actual, budget, months}){
 
 /* ============================ APP ============================ */
 function App(){
-  const [raw,setRaw]=useState({actual:EMBEDDED_DATA.actual, budget:EMBEDDED_DATA.budget});
-  const [source,setSource]=useState({mode:"embedded", at:EMBEDDED_DATA.asOf, err:null});
+  const [raw,setRaw]=useState({actual:DATA.actual, budget:DATA.budget});
+  const [source,setSource]=useState({mode:"embedded", at:DATA.asOf, err:null});
   const [view,setView]=useState("compare");
   const [rentSc,setRentSc]=useState(RENT_SCENARIOS[0]);
-  const budgetStartIdx = useMemo(()=>EMBEDDED_DATA.months.indexOf(CONFIG.BUDGET_START),[]);
+  // индекс месяца, с которого действует бюджет — из фиксированного календаря FY26,
+  // не зависит от того, загрузился ли data.js
+  const budgetStartIdx = useMemo(()=>{
+    const keys = Array.from({length:12},(_,i)=>monthKey(i));
+    const idx = keys.indexOf(CONFIG.BUDGET_START);
+    return idx>=0 ? idx : 0;
+  },[]);
   const budget = useMemo(()=>applyRentScenario(applyBudgetOverride(raw.actual, raw.budget, budgetStartIdx), rentSc),[raw,budgetStartIdx,rentSc]);
   const actual = useMemo(()=>applyRentScenario(raw.actual, rentSc),[raw,rentSc]);
 
@@ -580,6 +606,18 @@ function App(){
   const [cFrom,setCFrom]=useState(lastComplete);
   const [cTo,setCTo]=useState(lastComplete);
 
+  // при обновлении источника данных (загрузка из Google Sheets) пересчитываем
+  // дефолтные периоды — иначе после закрытия нового месяца дашборд
+  // продолжал бы показывать старый «последний месяц»
+  useEffect(()=>{
+    const comp = completeMonths(raw.actual);
+    const anyM = monthsWithAnyActual(raw.actual);
+    const lc = comp.length ? comp[comp.length-1] : 0;
+    const la = anyM.length ? anyM[anyM.length-1] : 0;
+    setPlFrom(0); setPlTo(la);
+    setCFrom(lc); setCTo(lc);
+  },[raw]);
+
   const load = useCallback(async ()=>{
     if(!CONFIG.SHEET_ID){ setSource(s=>({...s, err:"SHEET_ID не задан — используются встроенные данные"})); return; }
     try{
@@ -593,7 +631,7 @@ function App(){
       const now = new Date();
       setSource({mode:"live", at:now.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}), err:null});
     }catch(e){
-      setSource({mode:"embedded", at:EMBEDDED_DATA.asOf, err:"Google Sheets недоступен ("+e.message+") — показаны встроенные данные"});
+      setSource({mode:"embedded", at:DATA.asOf, err:"Google Sheets недоступен ("+e.message+") — показаны встроенные данные"});
     }
   },[]);
   useEffect(()=>{ if(CONFIG.SHEET_ID) load(); },[load]);
@@ -647,7 +685,7 @@ function App(){
             <span className="dot"></span>
             {source.mode==="live" ? "Google Sheets · "+source.at
              : source.mode==="loading" ? "Загрузка из Google Sheets…"
-             : "Встроенные данные · "+EMBEDDED_DATA.asOf}
+             : "Встроенные данные · "+DATA.asOf}
           </span>
           {CONFIG.SHEET_ID && <button className="refresh" onClick={load}>Обновить</button>}
         </div>
@@ -736,13 +774,13 @@ function App(){
           <div className="k-sub">{kpiCmp
             ? <Delta raw={prime!=null&&primeB!=null?prime-primeB:null} favorable={prime-primeB<0} text={"vs бюджет "+fmtPP(prime!=null&&primeB!=null?prime-primeB:null)}/>
             : <span>бюджет: {fmtPct(primeB)}</span>}
-            <span>· бенчмарк ≤ 60%</span></div>
+            <span>· бенчмарк 58–65%</span></div>
         </div>
         <div className="kpi">
           <div className="k-lbl">EBITDA</div>
           <div className="k-val">{fmtAED(kEB)}<span className="unit">AED</span></div>
           <div className="k-sub"><span>маржа {fmtPct(ebm)}</span>
-            {kpiCmp && <Delta raw={ebD} favorable={ebD>0} text={"vs бюджет "+(ebD>0?"+":"−")+fmt0.format(Math.abs(Math.round(ebD||0)))}/>}</div>
+            {kpiCmp && <Delta raw={ebD} favorable={ebD>0} text={"vs бюджет "+fmtDeltaAED(ebD)}/>}</div>
         </div>
       </div>
 
