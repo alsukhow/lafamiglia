@@ -356,12 +356,13 @@ function fmtCompact(v){
   return s+Math.round(a);
 }
 function MiniBars({title, bars, ticks, barColor, barLabel}){
-  const W=520, H=196, padL=8, padR=8, padT=20, padB=30;
+  const W=520, H=196, padL=8, padR=8, padT=24, padB=30;
   const all = [...bars.filter(v=>v!=null), ...((ticks||[]).filter(v=>v!=null)), 0];
   const max = Math.max(...all), min = Math.min(...all);
   const span = (max-min)||1;
   const y = v => padT + (max - v)/span * (H-padT-padB);
   const bw = (W-padL-padR)/12;
+  const cmp = !!ticks; // режим сравнения: факт внутри столбцов, бюджет у плашек
   return (
     <div className="chart-card">
       <div className="c-head">
@@ -377,19 +378,44 @@ function MiniBars({title, bars, ticks, barColor, barLabel}){
           if(v==null) return null;
           const x = padL + i*bw + bw*0.2;
           const y0=y(0), y1=y(v);
+          const h = Math.max(1.5, Math.abs(y0-y1));
+          let ly, lfill;
+          if(cmp && h>=14){          // внутри столбца, у его вершины
+            ly = v>=0 ? y1+11 : y1-5;
+            lfill = "#FAF7F0";
+          } else {                    // снаружи, за вершиной столбца
+            ly = v>=0 ? y1-4 : y1+11;
+            lfill = "var(--muted)";
+          }
           return (
             <g key={"a"+i}>
-              <rect x={x} width={bw*0.6} y={Math.min(y0,y1)} height={Math.max(1.5,Math.abs(y0-y1))}
+              <rect x={x} width={bw*0.6} y={Math.min(y0,y1)} height={h}
                     fill={barColor} opacity={v<0?0.75:0.92} rx="1.5"/>
-              <text x={x+bw*0.3} y={v>=0 ? y1-4 : y1+11} textAnchor="middle" fontSize="8.5"
-                    fill="var(--muted)" fontFamily="Inter" fontWeight="500">{fmtCompact(v)}</text>
+              <text x={x+bw*0.3} y={ly} textAnchor="middle" fontSize="8.5"
+                    fill={lfill} fontFamily="Inter" fontWeight="500"
+                    style={{paintOrder:"stroke", stroke: lfill==="#FAF7F0" ? "none" : "var(--paper)", strokeWidth:2.5}}>
+                {fmtCompact(v)}
+              </text>
             </g>
           );
         })}
         {(ticks||[]).map((v,i)=>{
           if(v==null) return null;
           const x = padL + i*bw + bw*0.08;
-          return <line key={"b"+i} x1={x} x2={x+bw*0.84} y1={y(v)} y2={y(v)} stroke="var(--gold)" strokeWidth="2.5"/>;
+          const a = bars[i];
+          const dup = a!=null && (Math.round(a)===Math.round(v) || fmtCompact(a)===fmtCompact(v)); // бюджет ≈ факту — не дублируем подпись
+          return (
+            <g key={"b"+i}>
+              <line x1={x} x2={x+bw*0.84} y1={y(v)} y2={y(v)} stroke="var(--gold)" strokeWidth="2.5"/>
+              {!dup && (
+                <text x={x+bw*0.42} y={v>=0 ? y(v)-4 : y(v)+11} textAnchor="middle" fontSize="8.5"
+                      fill="#8A6F3C" fontFamily="Inter" fontWeight="500"
+                      style={{paintOrder:"stroke", stroke:"var(--paper)", strokeWidth:2.5}}>
+                  {fmtCompact(v)}
+                </text>
+              )}
+            </g>
+          );
         })}
         {MONTH_LABELS.map((m,i)=>(
           <text key={m} x={padL+i*bw+bw/2} y={H-8} textAnchor="middle" fontSize="9.5" fill="var(--muted)" fontFamily="Inter">{m[0]}</text>
