@@ -192,11 +192,14 @@ function applyRevBasis(ds, sc){
   for(const k in ds) out[k] = ds[k];
   const rt = ds.rev_total || new Array(12).fill(null);
   const oi = ds.oi_total  || new Array(12).fill(null);
+  const cg = ds.cogs_total|| new Array(12).fill(null);
   out.rev_basis = Array.from({length:12},(_,m)=>{
     if(rt[m]==null) return null;
     if(sc.id==="pnl") return rt[m];
     return rt[m] + (oi[m]!=null ? oi[m] : 0); // нет данных по ПД — считаем 0, чтобы не терять месяц
   });
+  // валовая прибыль от расширенной базы: (Выручка + ПД) − Себестоимость
+  out.gp_basis = out.rev_basis.map((v,m)=> (v!=null && cg[m]!=null) ? v - cg[m] : null);
   return out;
 }
 
@@ -205,6 +208,8 @@ function applyRevBasis(ds, sc){
 const BENCHMARKS = {
   cogs_total:   [0.28,0.32],
   gross_profit: [0.68,0.72],
+  gp_basis:     [0.68,0.72],   // валовая маржа от расширенной базы — диапазон тот же, сопоставимость приблизительная (см. notice)
+  rev_basis:    null,
   bank_total:   [0.015,0.025],
   emp_total:    [0.28,0.35],
   gen_total:    [0.04,0.06],
@@ -216,17 +221,16 @@ const BENCHMARKS = {
   exp_total:    null,
   ebitda:       [0.08,0.15],   // fine dining на уровне ресторана: 5–15%; 10–20% — диапазон casual/QSR
 };
-const BENCH_HIGHER_BETTER = new Set(["gross_profit","ebitda"]);
+const BENCH_HIGHER_BETTER = new Set(["gross_profit","gp_basis","ebitda"]);
 
-const MODEL = [
-  {type:"group", section:"Выручка", dir:"rev", totalId:"rev_total", totalLabel:"Итого выручка",
-   leaves:[["rev_bev_alc","Beverages Alcoholic"],["rev_bev_nonalc","Beverages Non-Alcoholic"],["rev_food","Food"]]},
-  {type:"group", section:"Себестоимость", dir:"cost", totalId:"cogs_total", totalLabel:"Итого себестоимость",
-   leaves:[["cogs_bev_alc","COGS Beverages Alcoholic"],["cogs_bev_nonalc","COGS Beverages Non-Alc."],["cogs_food","COGS Food"]]},
-  {type:"single", id:"gross_profit", label:"Валовая прибыль", dir:"rev", grand:true},
-  {type:"group", section:"Прочие доходы / расходы", dir:"rev", totalId:"oi_total", totalLabel:"Итого прочие доходы (убыток)",
-   leaves:[["oi_service_charges","Service Charges"],["oi_service_paid","Service Charges Paid"],["oi_tips_collected","Tips Collected"],["oi_tips_paid","Tips Paid"]]},
-  {type:"expenses", section:"Операционные расходы", dir:"cost", cats:[
+/* --- переиспользуемые блоки P&L --- */
+const REV_GROUP = {type:"group", section:"Выручка", dir:"rev", totalId:"rev_total", totalLabel:"Итого выручка",
+   leaves:[["rev_bev_alc","Beverages Alcoholic"],["rev_bev_nonalc","Beverages Non-Alcoholic"],["rev_food","Food"]]};
+const COGS_GROUP = {type:"group", section:"Себестоимость", dir:"cost", totalId:"cogs_total", totalLabel:"Итого себестоимость",
+   leaves:[["cogs_bev_alc","COGS Beverages Alcoholic"],["cogs_bev_nonalc","COGS Beverages Non-Alc."],["cogs_food","COGS Food"]]};
+const OI_GROUP = {type:"group", section:"Прочие доходы / расходы", dir:"rev", totalId:"oi_total", totalLabel:"Итого прочие доходы (убыток)",
+   leaves:[["oi_service_charges","Service Charges"],["oi_service_paid","Service Charges Paid"],["oi_tips_collected","Tips Collected"],["oi_tips_paid","Tips Paid"]]};
+const EXPENSES_BLOCK = {type:"expenses", section:"Операционные расходы", dir:"cost", cats:[
     {totalId:"bank_total", label:"Bank Charges & Commissions",
      leaves:[["bank_charges","Bank Charges"],["bank_cc","Credit Card Commission"]]},
     {totalId:"emp_total", label:"Employee Cost",
@@ -242,12 +246,34 @@ const MODEL = [
     {totalId:"util_total", label:"Utilities (DEWA)", leaves:[]},
     {totalId:"sec_total", label:"Security", leaves:[]},
     {totalId:"rent_total", label:"Rent or Lease Payments", leaves:[]},
-  ]},
+  ]};
+
+/* --- стандартное представление: как в бухгалтерском P&L --- */
+const MODEL = [
+  REV_GROUP,
+  COGS_GROUP,
+  {type:"single", id:"gross_profit", label:"Валовая прибыль", dir:"rev", grand:true},
+  OI_GROUP,
+  EXPENSES_BLOCK,
   {type:"single", id:"exp_total", label:"Итого операционные расходы", dir:"cost", grand:false, totalStyle:true},
   {type:"single", id:"ebitda", label:"EBITDA", dir:"rev", grand:true},
 ];
 
-const REV_LIKE = new Set(["rev_bev_alc","rev_bev_nonalc","rev_food","rev_total","gross_profit","oi_service_charges","oi_service_paid","oi_tips_collected","oi_tips_paid","oi_total","ebitda"]);
+/* --- расширенное представление (база = выручка + прочие доходы):
+       ПД подняты выше черты, валовая прибыль = (Выручка + ПД) − Себестоимость.
+       EBITDA не меняется — прочие доходы лишь переносятся выше по структуре. --- */
+const MODEL_EXT = [
+  REV_GROUP,
+  OI_GROUP,
+  {type:"single", id:"rev_basis", label:"Итого выручка + прочие доходы", dir:"rev", grand:false, totalStyle:true},
+  COGS_GROUP,
+  {type:"single", id:"gp_basis", label:"Валовая прибыль (от расширенной базы)", dir:"rev", grand:true},
+  EXPENSES_BLOCK,
+  {type:"single", id:"exp_total", label:"Итого операционные расходы", dir:"cost", grand:false, totalStyle:true},
+  {type:"single", id:"ebitda", label:"EBITDA", dir:"rev", grand:true},
+];
+
+const REV_LIKE = new Set(["rev_bev_alc","rev_bev_nonalc","rev_food","rev_total","rev_basis","gross_profit","gp_basis","oi_service_charges","oi_service_paid","oi_tips_collected","oi_tips_paid","oi_total","ebitda"]);
 
 /* ============================ HELPERS ============================ */
 const fmt0 = new Intl.NumberFormat("en-US",{maximumFractionDigits:0});
@@ -470,10 +496,10 @@ function MiniBars({title, bars, ticks, barColor, barLabel}){
 }
 
 /* ============================ TABLE ROWS ============================ */
-function useRows(expanded, toggle){
+function useRows(expanded, toggle, model){
   return useCallback(function buildRows(renderCells){
     const rows=[];
-    for(const block of MODEL){
+    for(const block of model){
       if(block.type==="group"){
         rows.push(<tr key={"s"+block.section} className="r-section"><td>{block.section}</td><td colSpan={98}></td></tr>);
         for(const [id,label] of block.leaves){
@@ -507,14 +533,14 @@ function useRows(expanded, toggle){
       }
     }
     return rows;
-  },[expanded,toggle]);
+  },[expanded,toggle,model]);
 }
 
 /* ============================ VIEWS ============================ */
-function PLTable({ds, months, complete, partialSet, label}){
+function PLTable({ds, months, complete, partialSet, label, model}){
   const [expanded,setExpanded]=useState(new Set(["emp_total"]));
   const toggle = useCallback(id=>setExpanded(p=>{const n=new Set(p); n.has(id)?n.delete(id):n.add(id); return n;}),[]);
-  const buildRows = useRows(expanded,toggle);
+  const buildRows = useRows(expanded,toggle,model);
   const totalMonths = months.filter(m=>complete.includes(m));
   const totalLabel = totalMonths.length===months.length
     ? "Итого"
@@ -561,10 +587,10 @@ function PLTable({ds, months, complete, partialSet, label}){
   );
 }
 
-function CompareTable({actual, budget, months}){
+function CompareTable({actual, budget, months, model}){
   const [expanded,setExpanded]=useState(new Set(["emp_total"]));
   const toggle = useCallback(id=>setExpanded(p=>{const n=new Set(p); n.has(id)?n.delete(id):n.add(id); return n;}),[]);
-  const buildRows = useRows(expanded,toggle);
+  const buildRows = useRows(expanded,toggle,model);
   const revA = sumRange(actual,"rev_basis",months);
   const revB = sumRange(budget,"rev_basis",months);
 
@@ -674,8 +700,9 @@ function App(){
   const kpiCmp = view!=="budget";
   const kRev = sumRange(kpiDS,"rev_basis",kpiMonths);
   const kRevB = sumRange(budget,"rev_basis",kpiMonths);
-  const kGP = sumRange(kpiDS,"gross_profit",kpiMonths);
-  const kGPB = sumRange(budget,"gross_profit",kpiMonths);
+  const gpId = revSc.id==="incl_oi" ? "gp_basis" : "gross_profit";
+  const kGP = sumRange(kpiDS,gpId,kpiMonths);
+  const kGPB = sumRange(budget,gpId,kpiMonths);
   const kCOGS = sumRange(kpiDS,"cogs_total",kpiMonths);
   const kEmp = sumRange(kpiDS,"emp_total",kpiMonths);
   const kCOGSB = sumRange(budget,"cogs_total",kpiMonths);
@@ -742,10 +769,11 @@ function App(){
       </div>
       {revSc.id==="incl_oi" && (
         <div className="notice">
-          <b>База выручки:</b> KPI «Выручка», графики и все доли в % считаются от суммы
-          «Итого выручка + Итого прочие доходы (убыток)». Учтите: отраслевые бенчмарки
-          (колонка справа) рассчитаны от чистой выручки — при этой базе точки бенчмарков
-          смещаются и сопоставимы лишь приблизительно.
+          <b>База выручки:</b> P&L перестроен — прочие доходы подняты выше черты,
+          строка «Итого выручка + прочие доходы» служит базой, валовая прибыль = база − себестоимость
+          (EBITDA при этом не меняется). Все доли в %, KPI и графики считаются от расширенной базы.
+          Учтите: отраслевые бенчмарки рассчитаны от чистой выручки — при этой базе точки
+          бенчмарков смещаются и сопоставимы лишь приблизительно.
         </div>
       )}
       {rentSc.id!=="book" && (
@@ -838,9 +866,9 @@ function App(){
         </React.Fragment>}
       </div>
 
-      {view==="pl" && <PLTable ds={actual} months={plMonths} complete={complete} partialSet={partialSet} label="P&L · Факт"/>}
-      {view==="budget" && <PLTable ds={budget} months={budgetMonths} complete={budgetMonths} partialSet={new Set()} label="Бюджет FY26"/>}
-      {view==="compare" && <CompareTable actual={actual} budget={budget} months={cmpMonths}/>}
+      {view==="pl" && <PLTable ds={actual} months={plMonths} complete={complete} partialSet={partialSet} label="P&L · Факт" model={revSc.id==="incl_oi"?MODEL_EXT:MODEL}/>}
+      {view==="budget" && <PLTable ds={budget} months={budgetMonths} complete={budgetMonths} partialSet={new Set()} label="Бюджет FY26" model={revSc.id==="incl_oi"?MODEL_EXT:MODEL}/>}
+      {view==="compare" && <CompareTable actual={actual} budget={budget} months={cmpMonths} model={revSc.id==="incl_oi"?MODEL_EXT:MODEL}/>}
     </div>
   );
 }
