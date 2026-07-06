@@ -55,8 +55,8 @@ select:focus{border-color:var(--gold)}
 .kpi{padding:20px 22px;border-left:1px solid var(--hairline)}
 .kpi:first-child{border-left:none}
 .kpi .k-lbl{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);font-weight:600;margin-bottom:8px}
-.kpi .k-val{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:clamp(24px,2.6vw,31px);line-height:1;letter-spacing:.01em}
-.kpi .k-val .unit{font-size:.52em;color:var(--muted);letter-spacing:.06em;margin-left:4px}
+.kpi .k-val{font-family:'Inter',system-ui,sans-serif;font-weight:600;font-size:clamp(20px,2.2vw,26px);line-height:1.15;letter-spacing:-0.01em;font-variant-numeric:tabular-nums}
+.kpi .k-val .unit{font-size:.55em;color:var(--muted);font-weight:500;letter-spacing:.04em;margin-left:4px}
 .kpi .k-sub{font-size:12px;color:var(--muted);margin-top:8px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .delta{display:inline-block;font-size:11px;font-weight:600;border-radius:5px;padding:2px 7px;font-variant-numeric:tabular-nums}
 .delta.up{color:var(--good);background:var(--good-bg)}
@@ -349,9 +349,15 @@ function BenchCell({id, pct}){
 }
 
 /* ============================ MINI CHART ============================ */
-function MiniBars({title, actual, budget, unit}){
-  const W=520, H=170, padL=8, padR=8, padT=12, padB=22;
-  const all = [...actual.filter(v=>v!=null), ...budget.filter(v=>v!=null), 0];
+function fmtCompact(v){
+  const a = Math.abs(v), s = v<0 ? "−" : "";
+  if(a>=1e6){ const m=a/1e6; return s+(m>=10? Math.round(m) : m.toFixed(1))+"M"; }
+  if(a>=1e3) return s+Math.round(a/1e3)+"k";
+  return s+Math.round(a);
+}
+function MiniBars({title, bars, ticks, barColor, barLabel}){
+  const W=520, H=196, padL=8, padR=8, padT=20, padB=30;
+  const all = [...bars.filter(v=>v!=null), ...((ticks||[]).filter(v=>v!=null)), 0];
   const max = Math.max(...all), min = Math.min(...all);
   const span = (max-min)||1;
   const y = v => padT + (max - v)/span * (H-padT-padB);
@@ -361,26 +367,32 @@ function MiniBars({title, actual, budget, unit}){
       <div className="c-head">
         <div className="c-title">{title}</div>
         <div className="c-legend">
-          <span><span className="sw" style={{background:"var(--wine)"}}></span>Факт</span>
-          <span><span className="sw" style={{background:"none",borderTop:"2.5px solid var(--gold)",height:0,width:12}}></span>Бюджет</span>
+          <span><span className="sw" style={{background:barColor}}></span>{barLabel}</span>
+          {ticks && <span><span className="sw" style={{background:"none",borderTop:"2.5px solid var(--gold)",height:0,width:12}}></span>Бюджет</span>}
         </div>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={title}>
         <line x1={padL} x2={W-padR} y1={y(0)} y2={y(0)} stroke="var(--hairline-dark)" strokeWidth="1"/>
-        {actual.map((v,i)=>{
+        {bars.map((v,i)=>{
           if(v==null) return null;
           const x = padL + i*bw + bw*0.2;
           const y0=y(0), y1=y(v);
-          return <rect key={"a"+i} x={x} width={bw*0.6} y={Math.min(y0,y1)} height={Math.max(1.5,Math.abs(y0-y1))}
-                       fill="var(--wine)" opacity={v<0?0.75:0.92} rx="1.5"/>;
+          return (
+            <g key={"a"+i}>
+              <rect x={x} width={bw*0.6} y={Math.min(y0,y1)} height={Math.max(1.5,Math.abs(y0-y1))}
+                    fill={barColor} opacity={v<0?0.75:0.92} rx="1.5"/>
+              <text x={x+bw*0.3} y={v>=0 ? y1-4 : y1+11} textAnchor="middle" fontSize="8.5"
+                    fill="var(--muted)" fontFamily="Inter" fontWeight="500">{fmtCompact(v)}</text>
+            </g>
+          );
         })}
-        {budget.map((v,i)=>{
+        {(ticks||[]).map((v,i)=>{
           if(v==null) return null;
           const x = padL + i*bw + bw*0.08;
           return <line key={"b"+i} x1={x} x2={x+bw*0.84} y1={y(v)} y2={y(v)} stroke="var(--gold)" strokeWidth="2.5"/>;
         })}
         {MONTH_LABELS.map((m,i)=>(
-          <text key={m} x={padL+i*bw+bw/2} y={H-6} textAnchor="middle" fontSize="9.5" fill="var(--muted)" fontFamily="Inter">{m[0]}</text>
+          <text key={m} x={padL+i*bw+bw/2} y={H-8} textAnchor="middle" fontSize="9.5" fill="var(--muted)" fontFamily="Inter">{m[0]}</text>
         ))}
       </svg>
     </div>
@@ -393,14 +405,14 @@ function useRows(expanded, toggle){
     const rows=[];
     for(const block of MODEL){
       if(block.type==="group"){
-        rows.push(<tr key={"s"+block.section} className="r-section"><td colSpan={99}>{block.section}</td></tr>);
+        rows.push(<tr key={"s"+block.section} className="r-section"><td>{block.section}</td><td colSpan={98}></td></tr>);
         for(const [id,label] of block.leaves){
           rows.push(<tr key={id} className="r-leaf"><td>{label}</td>{renderCells(id, block.dir, false)}</tr>);
         }
         rows.push(<tr key={block.totalId} className="r-total"><td>{block.totalLabel}</td>{renderCells(block.totalId, block.dir, true)}</tr>);
       }
       else if(block.type==="expenses"){
-        rows.push(<tr key="sexp" className="r-section"><td colSpan={99}>{block.section}</td></tr>);
+        rows.push(<tr key="sexp" className="r-section"><td>{block.section}</td><td colSpan={98}></td></tr>);
         for(const cat of block.cats){
           const hasKids = cat.leaves.length>0;
           const open = expanded.has(cat.totalId);
@@ -709,8 +721,14 @@ function App(){
       </div>
 
       <div className="charts">
-        <MiniBars title="Выручка по месяцам" actual={actual.rev_total||[]} budget={budget.rev_total||[]}/>
-        <MiniBars title="EBITDA по месяцам" actual={actual.ebitda||[]} budget={budget.ebitda||[]}/>
+        {view!=="budget" && <React.Fragment>
+          <MiniBars title="Выручка по месяцам" bars={actual.rev_total||[]} ticks={view==="compare" ? (budget.rev_total||[]) : null} barColor="var(--wine)" barLabel="Факт"/>
+          <MiniBars title="EBITDA по месяцам" bars={actual.ebitda||[]} ticks={view==="compare" ? (budget.ebitda||[]) : null} barColor="var(--wine)" barLabel="Факт"/>
+        </React.Fragment>}
+        {view==="budget" && <React.Fragment>
+          <MiniBars title="Выручка · Бюджет FY26" bars={budget.rev_total||[]} ticks={null} barColor="var(--gold)" barLabel="Бюджет"/>
+          <MiniBars title="EBITDA · Бюджет FY26" bars={budget.ebitda||[]} ticks={null} barColor="var(--gold)" barLabel="Бюджет"/>
+        </React.Fragment>}
       </div>
 
       {view==="pl" && <PLTable ds={actual} months={plMonths} complete={complete} partialSet={partialSet} label="P&L · Факт"/>}
