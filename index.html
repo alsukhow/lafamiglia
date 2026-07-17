@@ -36,6 +36,13 @@ select:focus{border-color:var(--gold)}
 .refresh:hover{background:var(--wine-soft)}
 .rule{border:none;border-top:1px solid var(--gold);position:relative;margin-bottom:2px}
 .rule.thin{border-top:1px solid var(--hairline);margin-top:3px;margin-bottom:0}
+/* ---------- project switcher ---------- */
+.proj-switch{display:flex;gap:8px;margin-top:16px}
+.proj-btn{font-family:inherit;font-size:12px;letter-spacing:.12em;text-transform:uppercase;padding:9px 20px;border:1px solid var(--hairline-dark);background:transparent;cursor:pointer}
+.proj-btn.on{background:var(--wine);border-color:var(--wine);color:#fff}
+.placeholder{margin-top:24px;padding:36px 28px;background:var(--card);border:1px dashed var(--hairline-dark);border-radius:var(--radius);text-align:center}
+.placeholder h2{margin:0 0 10px;font-size:18px}
+.placeholder p{margin:0 auto;max-width:580px;color:var(--muted);font-size:13.5px;line-height:1.55}
 /* ---------- tabs ---------- */
 .tabs{display:flex;gap:4px;margin:20px 0 0;border-bottom:1px solid var(--hairline-dark);overflow-x:auto}
 .tab{font-size:13.5px;font-weight:500;color:var(--muted);padding:10px 16px 12px;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;transition:color .15s}
@@ -145,9 +152,8 @@ th.bench{border-left:1px dashed var(--hairline)}
    ========================================================================= */
 const CONFIG = {
   SHEET_ID: "1_3t1NrW6K9FI867t4uBDgZYfhVTk9AsZpb4bSzX1XH8",
-  TAB_ACTUAL: "Actual",
-  TAB_BUDGET: "Budget",
-  BUDGET_START: "2026-05"   // до этого месяца бюджет приравнивается к факту (Δ = 0)
+  // имена вкладок задаются в PROJECTS (внутри основного скрипта)
+  BUDGET_START: "2026-05"   // La Famiglia: до этого месяца бюджет приравнивается к факту (Δ = 0)
 };
 </script>
 
@@ -156,12 +162,16 @@ const CONFIG = {
 <script type="text/babel" data-presets="react">
 const {useState, useEffect, useMemo, useCallback} = React;
 
-/* --- Защита от отсутствующего data.js: если файл не загрузился (404, опечатка
-       в пути при деплое), приложение не падает — стартует на пустых данных
-       и пытается подтянуть Google Sheets. --- */
-const DATA = (typeof EMBEDDED_DATA !== "undefined" && EMBEDDED_DATA)
-  ? EMBEDDED_DATA
-  : {actual:{}, budget:{}, asOf:"нет данных (data.js не загружен)"};
+/* --- Защита от отсутствующего data.js + нормализация к структуре с проектами.
+       Поддерживается и старый формат data.js (actual/budget в корне) — он
+       трактуется как данные La Famiglia. --- */
+const RAW0 = (typeof EMBEDDED_DATA !== "undefined" && EMBEDDED_DATA) ? EMBEDDED_DATA : null;
+const EMPTY_PROJECTS = {lf:{actual:{},budget:{}}, cf:{actual:{},budget:null}};
+const DATA = RAW0 && RAW0.projects
+  ? {asOf: RAW0.asOf||"—", projects: {lf: RAW0.projects.lf||EMPTY_PROJECTS.lf, cf: RAW0.projects.cf||EMPTY_PROJECTS.cf}}
+  : RAW0
+    ? {asOf: RAW0.asOf||"—", projects: {lf:{actual:RAW0.actual||{}, budget:RAW0.budget||{}}, cf:EMPTY_PROJECTS.cf}}
+    : {asOf: "нет данных (data.js не загружен)", projects: EMPTY_PROJECTS};
 
 /* ============================ MODEL ============================ */
 const MONTH_LABELS = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
@@ -173,10 +183,16 @@ const MONTH_AXIS = ["Ян","Фе","Мр","Ап","Ма","Ин","Ил","Ав","С�
        пересчитывают Rent → Total Expenses → EBITDA.
        Процентный сценарий считается от выбранной базы выручки (rev_basis):
        «как в P&L» → от Итого выручка; «+ прочие доходы» → от расширенной базы. --- */
-const RENT_SCENARIOS = [
+const RENT_SCENARIOS_LF = [
   {id:"book",  label:"По учёту · 150k/год", monthly:null},
   {id:"m1500", label:"1.5M/год", monthly:125000},
   {id:"pct10", label:"10% от выручки",      pct:0.10},
+];
+/* Caffelini: статьи аренды в учёте нет — «по учёту» означает аренда = 0 */
+const RENT_SCENARIOS_CF = [
+  {id:"book",  label:"Без аренды (по учёту)", monthly:null},
+  {id:"pct10", label:"10% от выручки",        pct:0.10},
+  {id:"pct20", label:"20% от выручки",        pct:0.20},
 ];
 
 /* --- Сценарии базы выручки. Определяют знаменатель для всех % (доли статей,
@@ -223,7 +239,7 @@ const BENCHMARKS = {
 };
 const BENCH_HIGHER_BETTER = new Set(["gross_profit","gp_basis","ebitda"]);
 
-/* --- переиспользуемые блоки P&L --- */
+/* --- переиспользуемые блоки P&L · La Famiglia --- */
 const REV_GROUP = {type:"group", section:"Выручка", dir:"rev", totalId:"rev_total", totalLabel:"Итого выручка",
    leaves:[["rev_bev_alc","Beverages Alcoholic"],["rev_bev_nonalc","Beverages Non-Alcoholic"],["rev_food","Food"]]};
 const COGS_GROUP = {type:"group", section:"Себестоимость", dir:"cost", totalId:"cogs_total", totalLabel:"Итого себестоимость",
@@ -234,7 +250,7 @@ const EXPENSES_BLOCK = {type:"expenses", section:"Операционные ра�
     {totalId:"bank_total", label:"Bank Charges & Commissions",
      leaves:[["bank_charges","Bank Charges"],["bank_cc","Credit Card Commission"]]},
     {totalId:"emp_total", label:"Employee Cost",
-     leaves:[["emp_accommodation","Accommodation Expenses"],["emp_air","Air Ticket"],["emp_medical","Employee Medical Insurance"],["emp_gratuity","Gratuity Expense"],["emp_part_timers","Part Timers Salary"],["emp_salaries","Salaries"],["emp_staff_meal","Staff Meal"],["emp_staff_welfare","Staff Welfare"],["emp_travel_allow","Travel Allowance"],["emp_uniforms","Uniforms"],["emp_visa","Visa & Immigration"]]},
+     leaves:[["emp_accommodation","Accommodation Expenses"],["emp_air","Air Ticket"],["emp_emiratisation","Emiratisation Pension"],["emp_medical","Employee Medical Insurance"],["emp_gratuity","Gratuity Expense"],["emp_part_timers","Part Timers Salary"],["emp_salaries","Salaries"],["emp_staff_meal","Staff Meal"],["emp_staff_welfare","Staff Welfare"],["emp_travel_allow","Travel Allowance"],["emp_uniforms","Uniforms"],["emp_visa","Visa & Immigration"]]},
     {totalId:"gen_total", label:"General Expenses",
      leaves:[["gen_consumables_inv","Consumables — Inventory"],["gen_gas","Gas Supply"],["gen_consumables","General Consumables"],["gen_laundry","Laundry Services"],["gen_office","Office Expenses"],["gen_operating","Operating Expenses"],["gen_pro","PRO Expenses"],["gen_repairs","Repairs & Maintenance"],["gen_rounding","Rounding Off"],["gen_stationery","Stationery & Printing"],["gen_subscriptions","Subscriptions"],["gen_telephone","Telephone Expenses"],["gen_travel","Travel Expenses"],["gen_utensils","Utensils, Cutleries & Pack."]]},
     {totalId:"legal_total", label:"Legal & Professional",
@@ -248,32 +264,69 @@ const EXPENSES_BLOCK = {type:"expenses", section:"Операционные ра�
     {totalId:"rent_total", label:"Rent or Lease Payments", leaves:[]},
   ]};
 
-/* --- стандартное представление: как в бухгалтерском P&L --- */
-const MODEL = [
-  REV_GROUP,
-  COGS_GROUP,
-  {type:"single", id:"gross_profit", label:"Валовая прибыль", dir:"rev", grand:true},
-  OI_GROUP,
-  EXPENSES_BLOCK,
-  {type:"single", id:"exp_total", label:"Итого операционные расходы", dir:"cost", grand:false, totalStyle:true},
-  {type:"single", id:"ebitda", label:"EBITDA", dir:"rev", grand:true},
+/* --- блоки P&L · Caffelini (структура QuickBooks ISD Catering) --- */
+const REV_GROUP_CF = {type:"group", section:"Выручка", dir:"rev", totalId:"rev_total", totalLabel:"Итого выручка",
+   leaves:[["rev_bev","Beverages"],["rev_food","Food"]]};
+const COGS_GROUP_CF = {type:"group", section:"Себестоимость", dir:"cost", totalId:"cogs_total", totalLabel:"Итого себестоимость",
+   leaves:[["cogs_food","COGS Food"]]};
+const OI_GROUP_CF = {type:"group", section:"Прочие доходы / расходы", dir:"rev", totalId:"oi_total", totalLabel:"Итого прочие доходы (убыток)",
+   leaves:[["oi_tips_collected","Tips Collected"]]};
+const EXPENSES_BLOCK_CF = {type:"expenses", section:"Операционные расходы", dir:"cost", cats:[
+    {totalId:"bank_total", label:"Bank Charges & Commissions",
+     leaves:[["bank_charges","Bank Charges"],["bank_cc","Credit Card Commission"],["bank_telr","Telr Commission"]]},
+    {totalId:"emp_total", label:"Employee Cost",
+     leaves:[["emp_gratuity","Gratuity Expense"],["emp_salaries","Salaries"]]},
+    {totalId:"gen_total", label:"General Expenses",
+     leaves:[["gen_consumables","Consumables"],["gen_office","Office Expenses"],["gen_preopening","Pre-opening Cost"],["gen_repairs","Repairs & Maintenance"],["gen_stationery","Stationery & Printing"],["gen_subscriptions","Subscriptions"],["gen_utensils","Utensils, Cutleries & Pack."]]},
+    {totalId:"legal_total", label:"Legal & Professional",
+     leaves:[["legal_trade","Trade License Fee"]]},
+    {totalId:"mkt_total", label:"Marketing & Advertising",
+     leaves:[["mkt_digital","Digital Marketing"]]},
+    {totalId:"shared_total", label:"Shared Costs (ISD)",
+     leaves:[["shared_emp_fnb","Shared Employee Cost — F&B"]]},
+    {totalId:"rent_total", label:"Rent or Lease Payments", leaves:[]},
+  ]};
+
+/* --- фабрика: из блоков собираются оба представления (стандартное и от расширенной базы) --- */
+function makeModels(revGroup, cogsGroup, oiGroup, expensesBlock){
+  const tail = [
+    expensesBlock,
+    {type:"single", id:"exp_total", label:"Итого операционные расходы", dir:"cost", grand:false, totalStyle:true},
+    {type:"single", id:"ebitda", label:"EBITDA", dir:"rev", grand:true},
+  ];
+  return {
+    std: [
+      revGroup, cogsGroup,
+      {type:"single", id:"gross_profit", label:"Валовая прибыль", dir:"rev", grand:true},
+      oiGroup, ...tail
+    ],
+    ext: [
+      revGroup, oiGroup,
+      {type:"single", id:"rev_basis", label:"Итого выручка + прочие доходы", dir:"rev", grand:false, totalStyle:true},
+      cogsGroup,
+      {type:"single", id:"gp_basis", label:"Валовая прибыль (от расширенной базы)", dir:"rev", grand:true},
+      ...tail
+    ],
+  };
+}
+const MODELS = {
+  lf: makeModels(REV_GROUP, COGS_GROUP, OI_GROUP, EXPENSES_BLOCK),
+  cf: makeModels(REV_GROUP_CF, COGS_GROUP_CF, OI_GROUP_CF, EXPENSES_BLOCK_CF),
+};
+
+/* --- проекты --- */
+const PROJECTS = [
+  {id:"lf", title:"LA FAMIGLIA", eyebrow:"La Famiglia Restaurant LLC · Dubai Sports City · FY 2026",
+   sub:"P&L и исполнение бюджета · AED · метод начисления",
+   tabActual:"LF Actual", tabBudget:"LF Budget", hasBudget:true, budgetStart:CONFIG.BUDGET_START,
+   rentScenarios: RENT_SCENARIOS_LF},
+  {id:"cf", title:"CAFFELINI", eyebrow:"ISD Catering LLC · Financial Report · FY 2026",
+   sub:"P&L · AED · метод начисления · бюджет FY26 прорабатывается",
+   tabActual:"Caffelini Actual", tabBudget:null, hasBudget:false, budgetStart:null,
+   rentScenarios: RENT_SCENARIOS_CF},
 ];
 
-/* --- расширенное представление (база = выручка + прочие доходы):
-       ПД подняты выше черты, валовая прибыль = (Выручка + ПД) − Себестоимость.
-       EBITDA не меняется — прочие доходы лишь переносятся выше по структуре. --- */
-const MODEL_EXT = [
-  REV_GROUP,
-  OI_GROUP,
-  {type:"single", id:"rev_basis", label:"Итого выручка + прочие доходы", dir:"rev", grand:false, totalStyle:true},
-  COGS_GROUP,
-  {type:"single", id:"gp_basis", label:"Валовая прибыль (от расширенной базы)", dir:"rev", grand:true},
-  EXPENSES_BLOCK,
-  {type:"single", id:"exp_total", label:"Итого операционные расходы", dir:"cost", grand:false, totalStyle:true},
-  {type:"single", id:"ebitda", label:"EBITDA", dir:"rev", grand:true},
-];
-
-const REV_LIKE = new Set(["rev_bev_alc","rev_bev_nonalc","rev_food","rev_total","rev_basis","gross_profit","gp_basis","oi_service_charges","oi_service_paid","oi_tips_collected","oi_tips_paid","oi_total","ebitda"]);
+const REV_LIKE = new Set(["rev_bev_alc","rev_bev_nonalc","rev_bev","rev_food","rev_total","rev_basis","gross_profit","gp_basis","oi_service_charges","oi_service_paid","oi_tips_collected","oi_tips_paid","oi_total","ebitda"]);
 
 /* ============================ HELPERS ============================ */
 const fmt0 = new Intl.NumberFormat("en-US",{maximumFractionDigits:0});
@@ -330,11 +383,15 @@ function applyRentScenario(ds, sc){
     if(!out[k]) out[k] = new Array(12).fill(null);
   }
   for(let m=0;m<12;m++){
-    const oldRent = ds.rent_total ? ds.rent_total[m] : null;
+    // сценарий применяем только к закрытым месяцам (есть EBITDA)
+    const monthClosed = ds.ebitda && ds.ebitda[m]!=null;
+    if(!monthClosed) continue;
+    // нет статьи аренды (Caffelini) = аренда 0, а не «нет данных»
+    const oldRent = (ds.rent_total && ds.rent_total[m]!=null) ? ds.rent_total[m] : 0;
     // база для процентной аренды — выбранная база выручки; fallback на rev_total
     const rev = ds.rev_basis ? ds.rev_basis[m] : (ds.rev_total ? ds.rev_total[m] : null);
     const newRent = sc.monthly!=null ? sc.monthly : (rev!=null ? rev*sc.pct : null);
-    if(oldRent==null || newRent==null) continue; // частичные месяцы не трогаем
+    if(newRent==null) continue;
     const dlt = newRent - oldRent;
     out.rent_lease[m] = newRent;
     out.rent_total[m] = newRent;
@@ -630,22 +687,40 @@ function CompareTable({actual, budget, months, model}){
 
 /* ============================ APP ============================ */
 function App(){
-  const [raw,setRaw]=useState({actual:DATA.actual, budget:DATA.budget});
+  const [raw,setRaw]=useState(DATA.projects);
+  const [projId,setProjId]=useState("lf");
+  const proj = PROJECTS.find(p=>p.id===projId);
   const [source,setSource]=useState({mode:"embedded", at:DATA.asOf, err:null});
   const [view,setView]=useState("compare");
-  const [rentSc,setRentSc]=useState(RENT_SCENARIOS[0]);
+  const [rentSc,setRentSc]=useState(PROJECTS[0].rentScenarios[0]);
   const [revSc,setRevSc]=useState(REV_SCENARIOS[0]);
-  // индекс месяца, с которого действует бюджет — из фиксированного календаря FY26,
-  // не зависит от того, загрузился ли data.js
+
+  const rawP = raw[projId] || {actual:{}, budget:null};
+  const hasBudget = !!(proj.hasBudget && rawP.budget && Object.keys(rawP.budget).length>0);
+  const models = MODELS[projId];
+  const model = revSc.id==="incl_oi" ? models.ext : models.std;
+
+  // смена проекта: сценарий аренды -> первый в списке проекта; без бюджета уходим на вкладку P&L
+  useEffect(()=>{
+    setRentSc(proj.rentScenarios[0]);
+    if(!proj.hasBudget) setView("pl");
+  },[projId]);
+
+  // индекс месяца, с которого действует бюджет (для La Famiglia — с мая)
   const budgetStartIdx = useMemo(()=>{
+    if(!proj.budgetStart) return 0;
     const keys = Array.from({length:12},(_,i)=>monthKey(i));
-    const idx = keys.indexOf(CONFIG.BUDGET_START);
+    const idx = keys.indexOf(proj.budgetStart);
     return idx>=0 ? idx : 0;
-  },[]);
+  },[projId]);
+
   // порядок важен: сначала база выручки (rev_basis), затем сценарий аренды —
   // процентная аренда считается уже от выбранной базы
-  const budget = useMemo(()=>applyRentScenario(applyRevBasis(applyBudgetOverride(raw.actual, raw.budget, budgetStartIdx), revSc), rentSc),[raw,budgetStartIdx,rentSc,revSc]);
-  const actual = useMemo(()=>applyRentScenario(applyRevBasis(raw.actual, revSc), rentSc),[raw,rentSc,revSc]);
+  const budget = useMemo(()=>{
+    const src = hasBudget ? applyBudgetOverride(rawP.actual, rawP.budget, budgetStartIdx) : {};
+    return applyRentScenario(applyRevBasis(src, revSc), rentSc);
+  },[raw,projId,budgetStartIdx,rentSc,revSc,hasBudget]);
+  const actual = useMemo(()=>applyRentScenario(applyRevBasis(rawP.actual, revSc), rentSc),[raw,projId,rentSc,revSc]);
 
   const complete = useMemo(()=>completeMonths(actual),[actual]);
   const anyData = useMemo(()=>monthsWithAnyActual(actual),[actual]);
@@ -659,32 +734,51 @@ function App(){
   const [cFrom,setCFrom]=useState(lastComplete);
   const [cTo,setCTo]=useState(lastComplete);
 
-  // при обновлении источника данных (загрузка из Google Sheets) пересчитываем
-  // дефолтные периоды — иначе после закрытия нового месяца дашборд
-  // продолжал бы показывать старый «последний месяц»
+  // при обновлении данных или смене проекта пересчитываем дефолтные периоды
   useEffect(()=>{
-    const comp = completeMonths(raw.actual);
-    const anyM = monthsWithAnyActual(raw.actual);
+    const act = (raw[projId]||{}).actual || {};
+    const comp = completeMonths(act);
+    const anyM = monthsWithAnyActual(act);
     const lc = comp.length ? comp[comp.length-1] : 0;
     const la = anyM.length ? anyM[anyM.length-1] : 0;
     setPlFrom(0); setPlTo(la);
     setCFrom(lc); setCTo(lc);
-  },[raw]);
+  },[raw,projId]);
 
   const load = useCallback(async ()=>{
     if(!CONFIG.SHEET_ID){ setSource(s=>({...s, err:"SHEET_ID не задан — используются встроенные данные"})); return; }
-    try{
-      setSource({mode:"loading",at:null,err:null});
-      const [a,b] = await Promise.all([
-        loadSheetTab(CONFIG.SHEET_ID, CONFIG.TAB_ACTUAL),
-        loadSheetTab(CONFIG.SHEET_ID, CONFIG.TAB_BUDGET)
-      ]);
-      if(!a.rev_total) throw new Error("во вкладке Actual не найдена строка rev_total — проверьте колонку id");
-      setRaw({actual:a, budget:b});
+    setSource({mode:"loading",at:null,err:null});
+    const tryTab = async tab => {
+      try{ return {ok:true, data: await loadSheetTab(CONFIG.SHEET_ID, tab)}; }
+      catch(e){ return {ok:false, err:"вкладка «"+tab+"»: "+e.message}; }
+    };
+    const jobs = [];
+    for(const p of PROJECTS){
+      jobs.push(tryTab(p.tabActual));
+      jobs.push(p.tabBudget ? tryTab(p.tabBudget) : Promise.resolve({ok:true, data:null}));
+    }
+    const flat = await Promise.all(jobs);
+    const errs = [];
+    const next = {};
+    PROJECTS.forEach((p,i)=>{
+      const a = flat[i*2], b = flat[i*2+1];
+      if(a.ok && a.data && !a.data.rev_total){ a.ok=false; a.err="вкладка «"+p.tabActual+"»: не найдена строка rev_total — проверьте колонку id"; }
+      const emb = DATA.projects[p.id] || {actual:{}, budget:null};
+      next[p.id] = {
+        actual: (a.ok && a.data) ? a.data : emb.actual,
+        budget: p.tabBudget ? ((b.ok && b.data) ? b.data : emb.budget) : null,
+      };
+      if(!a.ok) errs.push(a.err);
+      if(!b.ok) errs.push(b.err);
+    });
+    const anyOk = flat.some(r=>r.ok && r.data);
+    if(anyOk){
+      setRaw(next);
       const now = new Date();
-      setSource({mode:"live", at:now.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}), err:null});
-    }catch(e){
-      setSource({mode:"embedded", at:DATA.asOf, err:"Google Sheets недоступен ("+e.message+") — показаны встроенные данные"});
+      setSource({mode:"live", at:now.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}),
+                 err: errs.length ? errs.join("; ")+" — для них показаны встроенные данные" : null});
+    }else{
+      setSource({mode:"embedded", at:DATA.asOf, err:"Google Sheets недоступен ("+errs.join("; ")+") — показаны встроенные данные"});
     }
   },[]);
   useEffect(()=>{ if(CONFIG.SHEET_ID) load(); },[load]);
@@ -694,10 +788,12 @@ function App(){
   const cmpMonths = useMemo(()=>{ const out=[]; for(let m=cFrom;m<=cTo;m++) if(complete.includes(m)) out.push(m); return out; },[cFrom,cTo,complete]);
   const budgetMonths = useMemo(()=>Array.from({length:12},(_,i)=>i),[]);
 
+  const showPlaceholder = !hasBudget && view!=="pl";
+
   // KPI period
   const kpiMonths = view==="budget" ? budgetMonths : (view==="pl" ? plMonths.filter(m=>complete.includes(m)) : cmpMonths);
   const kpiDS = view==="budget" ? budget : actual;
-  const kpiCmp = view!=="budget";
+  const kpiCmp = view!=="budget" && hasBudget;
   const kRev = sumRange(kpiDS,"rev_basis",kpiMonths);
   const kRevB = sumRange(budget,"rev_basis",kpiMonths);
   const gpId = revSc.id==="incl_oi" ? "gp_basis" : "gross_profit";
@@ -726,13 +822,15 @@ function App(){
     </select>
   );
 
+  const partialList = plMonths.filter(m=>partialSet.has(m)).map(m=>MONTH_FULL[m]).join(", ");
+
   return (
     <div className="wrap">
       <div className="masthead">
         <div className="brand">
-          <div className="eyebrow">Dubai Sports City · Financial Report · FY 2026</div>
-          <h1>LA FAMIGLIA</h1>
-          <div className="sub">P&L и исполнение бюджета · AED · метод начисления</div>
+          <div className="eyebrow">{proj.eyebrow}</div>
+          <h1>{proj.title}</h1>
+          <div className="sub">{proj.sub}</div>
         </div>
         <div className="source">
           <span className={"badge "+(source.mode==="live"?"live":source.err&&CONFIG.SHEET_ID?"err":"")}>
@@ -744,6 +842,11 @@ function App(){
           {CONFIG.SHEET_ID && <button className="refresh" onClick={load}>Обновить</button>}
         </div>
       </div>
+      <div className="proj-switch">
+        {PROJECTS.map(p=>(
+          <button key={p.id} className={"proj-btn"+(projId===p.id?" on":"")} onClick={()=>setProjId(p.id)}>{p.title}</button>
+        ))}
+      </div>
       <hr className="rule"/><hr className="rule thin"/>
       {source.err && CONFIG.SHEET_ID && <div className="notice"><b>Внимание:</b> {source.err}</div>}
 
@@ -753,10 +856,22 @@ function App(){
         <button className={"tab"+(view==="compare"?" on":"")} onClick={()=>setView("compare")}>Факт vs Бюджет</button>
       </div>
 
+      {showPlaceholder && (
+        <div className="placeholder">
+          <h2>Бюджет Caffelini прорабатывается</h2>
+          <p>Бюджет FY26 для Caffelini ещё не утверждён, поэтому вкладки «Бюджет FY26» и «Факт vs Бюджет»
+             пока пустые. Когда бюджет будет готов, добавьте в Google Sheets вкладку
+             «Caffelini Budget» с той же структурой строк, что и «Caffelini Actual», пропишите её
+             в настройках проекта — и данные появятся здесь автоматически. Фактический P&L доступен
+             на вкладке «P&L · Факт».</p>
+        </div>
+      )}
+
+      {!showPlaceholder && <React.Fragment>
       <div className="controls scenario-bar">
         <span className="lbl">Сценарий аренды</span>
         <div className="chips">
-          {RENT_SCENARIOS.map(s=>(
+          {proj.rentScenarios.map(s=>(
             <button key={s.id} className={"chip"+(rentSc.id===s.id?" on":"")} onClick={()=>setRentSc(s)}>{s.label}</button>
           ))}
         </div>
@@ -778,7 +893,7 @@ function App(){
       )}
       {rentSc.id!=="book" && (
         <div className="notice pf-note">
-          <b>Pro-forma:</b> аренда пересчитана по сценарию «{rentSc.label}» одновременно в факте и бюджете;
+          <b>Pro-forma:</b> аренда пересчитана по сценарию «{rentSc.label}» {hasBudget?"одновременно в факте и бюджете":"в факте"};
           Total Expenses и EBITDA скорректированы.
           {rentSc.pct!=null && <span> Процент считается от базы «{revSc.label}».</span>}
           {" "}Цифры <b>не соответствуют</b> бухгалтерскому P&L —
@@ -814,14 +929,14 @@ function App(){
           </div>
         </div>
       )}
-      {view==="compare" && cFrom < budgetStartIdx && (
+      {view==="compare" && hasBudget && budgetStartIdx>0 && cFrom < budgetStartIdx && (
         <div className="notice">
           Бюджет на <b>январь–апрель</b> приравнен к факту (Δ = 0): бюджет FY26 утверждён с мая. Сравнение содержательно с <b>мая 2026</b>.
         </div>
       )}
-      {view==="pl" && plMonths.some(m=>partialSet.has(m)) && (
+      {view==="pl" && partialList && (
         <div className="notice">
-          <b>Июнь 2026 — частичный месяц:</b> загружена только выручка, расходы ещё не закрыты. Колонка «Итого» считается по полным месяцам.
+          <b>{partialList} — частичный месяц:</b> месяц не закрыт (строка EBITDA пуста). Колонка «Итого» считается по полным месяцам.
         </div>
       )}
 
@@ -830,21 +945,21 @@ function App(){
           <div className="k-lbl">{revSc.id==="incl_oi" ? "Выручка + проч. дох." : "Выручка"} · {kpiCaption}</div>
           <div className="k-val">{fmtAED(kRev)}<span className="unit">AED</span></div>
           <div className="k-sub">{kpiCmp && <Delta raw={revD} favorable={revD>0} text={"vs бюджет "+fmtDeltaPct(revD)}/>}
-            {!kpiCmp && <span>план на год: {fmtAED(sumRange(budget,"rev_basis",budgetMonths))} AED</span>}</div>
+            {!kpiCmp && hasBudget && <span>план на год: {fmtAED(sumRange(budget,"rev_basis",budgetMonths))} AED</span>}</div>
         </div>
         <div className="kpi">
           <div className="k-lbl">Валовая маржа</div>
           <div className="k-val">{fmtPct(gm)}</div>
           <div className="k-sub">{kpiCmp
             ? <Delta raw={gm!=null&&gmB!=null?gm-gmB:null} favorable={gm-gmB>0} text={"vs бюджет "+fmtPP(gm!=null&&gmB!=null?gm-gmB:null)}/>
-            : <span>целевая по бюджету: {fmtPct(gmB)}</span>}</div>
+            : hasBudget ? <span>целевая по бюджету: {fmtPct(gmB)}</span> : null}</div>
         </div>
         <div className="kpi">
           <div className="k-lbl">Prime Cost (COGS + ФОТ)</div>
           <div className="k-val">{fmtPct(prime)}</div>
           <div className="k-sub">{kpiCmp
             ? <Delta raw={prime!=null&&primeB!=null?prime-primeB:null} favorable={prime-primeB<0} text={"vs бюджет "+fmtPP(prime!=null&&primeB!=null?prime-primeB:null)}/>
-            : <span>бюджет: {fmtPct(primeB)}</span>}
+            : hasBudget ? <span>бюджет: {fmtPct(primeB)}</span> : null}
             <span>· бенчмарк 58–65%</span></div>
         </div>
         <div className="kpi">
@@ -857,8 +972,8 @@ function App(){
 
       <div className="charts">
         {view!=="budget" && <React.Fragment>
-          <MiniBars title={(revSc.id==="incl_oi"?"Выручка + проч. доходы":"Выручка")+" по месяцам"} bars={actual.rev_basis||[]} ticks={view==="compare" ? (budget.rev_basis||[]) : null} barColor="var(--wine)" barLabel="Факт"/>
-          <MiniBars title="EBITDA по месяцам" bars={actual.ebitda||[]} ticks={view==="compare" ? (budget.ebitda||[]) : null} barColor="var(--wine)" barLabel="Факт"/>
+          <MiniBars title={(revSc.id==="incl_oi"?"Выручка + проч. доходы":"Выручка")+" по месяцам"} bars={actual.rev_basis||[]} ticks={view==="compare" && hasBudget ? (budget.rev_basis||[]) : null} barColor="var(--wine)" barLabel="Факт"/>
+          <MiniBars title="EBITDA по месяцам" bars={actual.ebitda||[]} ticks={view==="compare" && hasBudget ? (budget.ebitda||[]) : null} barColor="var(--wine)" barLabel="Факт"/>
         </React.Fragment>}
         {view==="budget" && <React.Fragment>
           <MiniBars title={(revSc.id==="incl_oi"?"Выручка + проч. доходы":"Выручка")+" · Бюджет FY26"} bars={budget.rev_basis||[]} ticks={null} barColor="var(--gold)" barLabel="Бюджет"/>
@@ -866,9 +981,10 @@ function App(){
         </React.Fragment>}
       </div>
 
-      {view==="pl" && <PLTable ds={actual} months={plMonths} complete={complete} partialSet={partialSet} label="P&L · Факт" model={revSc.id==="incl_oi"?MODEL_EXT:MODEL}/>}
-      {view==="budget" && <PLTable ds={budget} months={budgetMonths} complete={budgetMonths} partialSet={new Set()} label="Бюджет FY26" model={revSc.id==="incl_oi"?MODEL_EXT:MODEL}/>}
-      {view==="compare" && <CompareTable actual={actual} budget={budget} months={cmpMonths} model={revSc.id==="incl_oi"?MODEL_EXT:MODEL}/>}
+      {view==="pl" && <PLTable ds={actual} months={plMonths} complete={complete} partialSet={partialSet} label="P&L · Факт" model={model}/>}
+      {view==="budget" && <PLTable ds={budget} months={budgetMonths} complete={budgetMonths} partialSet={new Set()} label="Бюджет FY26" model={model}/>}
+      {view==="compare" && <CompareTable actual={actual} budget={budget} months={cmpMonths} model={model}/>}
+      </React.Fragment>}
     </div>
   );
 }
