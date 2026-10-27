@@ -192,6 +192,7 @@ const RENT_SCENARIOS_LF = [
 const RENT_SCENARIOS_CF = [
   {id:"book",  label:"Без аренды (по учёту)", monthly:null},
   {id:"pct10", label:"10% от выручки",        pct:0.10},
+  {id:"pct15", label:"15% all-inclusive",     pct:0.15},
   {id:"pct20", label:"20% от выручки",        pct:0.20},
 ];
 
@@ -248,7 +249,7 @@ const OI_GROUP = {type:"group", section:"Прочие доходы / расхо�
    leaves:[["oi_service_charges","Service Charges"],["oi_service_paid","Service Charges Paid"],["oi_tips_collected","Tips Collected"],["oi_tips_paid","Tips Paid"]]};
 const EXPENSES_BLOCK = {type:"expenses", section:"Операционные расходы", dir:"cost", cats:[
     {totalId:"bank_total", label:"Bank Charges & Commissions",
-     leaves:[["bank_charges","Bank Charges"],["bank_cc","Credit Card Commission"]]},
+     leaves:[["bank_charges","Bank Charges"],["bank_cc","Credit Card Commission"],["bank_stripe","Stripe Commission"]]},
     {totalId:"emp_total", label:"Employee Cost",
      leaves:[["emp_accommodation","Accommodation Expenses"],["emp_air","Air Ticket"],["emp_emiratisation","Emiratisation Pension"],["emp_medical","Employee Medical Insurance"],["emp_gratuity","Gratuity Expense"],["emp_part_timers","Part Timers Salary"],["emp_salaries","Salaries"],["emp_staff_meal","Staff Meal"],["emp_staff_welfare","Staff Welfare"],["emp_travel_allow","Travel Allowance"],["emp_uniforms","Uniforms"],["emp_visa","Visa & Immigration"]]},
     {totalId:"gen_total", label:"General Expenses",
@@ -273,7 +274,7 @@ const OI_GROUP_CF = {type:"group", section:"Прочие доходы / расх
    leaves:[["oi_tips_collected","Tips Collected"]]};
 const EXPENSES_BLOCK_CF = {type:"expenses", section:"Операционные расходы", dir:"cost", cats:[
     {totalId:"bank_total", label:"Bank Charges & Commissions",
-     leaves:[["bank_charges","Bank Charges"],["bank_cc","Credit Card Commission"],["bank_telr","Telr Commission"]]},
+     leaves:[["bank_charges","Bank Charges"],["bank_cc","Credit Card Commission"],["bank_deliveroo","Deliveroo Commission"],["bank_telr","Telr Commission"]]},
     {totalId:"emp_total", label:"Employee Cost",
      leaves:[["emp_accommodation","Accommodation"],["emp_medical","Employee Medical Insurance"],["emp_gratuity","Gratuity Expense"],["emp_salaries","Salaries"],["emp_staff_meal","Staff Meal"],["emp_visa","Visa & Immigration"]]},
     {totalId:"gen_total", label:"General Expenses",
